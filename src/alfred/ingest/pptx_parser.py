@@ -19,18 +19,13 @@ from pptx.shapes.picture import Picture
 from pptx.slide import Slide
 
 from alfred.ingest.errors import IngestError, TooManyPagesError
-from alfred.ingest.issues import MATH_NS, equation_issue, visual_issue
+from alfred.ingest.issues import MATH_NS, MIN_VISUAL_SHARE, equation_issue, visual_issue
 from alfred.ingest.models import Block, BlockKind, Page
 from alfred.ingest.text import clean_text
 
 PARSER_NAME = f"python-pptx-{version('python-pptx')}"
 
 HIDDEN_ISSUE = "hidden slide"
-
-# Pictures and charts covering at least this share of the slide are treated as content
-# (diagrams, plots), not decoration. Measured on a real cloud deck: every diagram covered
-# 27-60% of its slide, while icons and logos stay well below 10%.
-MIN_VISUAL_SHARE = 0.10
 
 _TITLE_TYPES = {PP_PLACEHOLDER.TITLE, PP_PLACEHOLDER.CENTER_TITLE, PP_PLACEHOLDER.VERTICAL_TITLE}
 

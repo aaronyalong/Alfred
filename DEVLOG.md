@@ -4,6 +4,38 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-10-22: PDF pages with images and vector drawings are flagged
+
+**Problem:** on the 60-page NLP review PDF, the baseline flagged **0 pages**, yet formulas and
+diagrams were clearly missing (e.g. a cosine-similarity slide kept its sentence but lost
+the formula).
+
+**Measured first.** Counting the PDF objects on each page showed two kinds of hidden content:
+
+- **Raster images:** 8 pages have an image covering ≥10% of the page.
+- **Vector drawings:** 6 pages each draw **2,381–5,797 path objects**. All 6 turned out to
+  be formulas or diagrams drawn as outline shapes instead of text: the bigram
+  approximation, log probabilities, the cosine formula, the attention mask matrix, an
+  attention diagram exercise, and the temperature formula. Every other page draws at most
+  ~60 paths (lines, boxes, underlines).
+
+**Rules:** flag images covering ≥10% of the page (the same threshold as PPTX, now shared),
+and flag pages with ≥500 vector paths. With a 40× gap between ordinary pages and
+formula pages, 500 sits safely in between. **Result: 13 of 60 pages flagged, up from 0**,
+including the photo-credit-only slide the earlier character-count check missed. The 6
+vector pages were checked by hand; the image pages weren't, individually.
+
+**Bug found on the way:** PDFium marks a hyphen at a line break with the non-character
+U+FFFE ("n￾grams"). Both occurrences in the file were real hyphens ("n-grams",
+"low-probability"), so U+FFFE now becomes "-". Dropping it would produce "ngrams", which
+also breaks quote matching later.
+
+**What this means for the benchmark:** about 1 in 5 pages of an NLP lecture has content
+that text extraction can't see. The question for docling and for the vision experiment is
+how much of that they recover, and at what cost.
+
+---
+
 ## 2026-10-21: Baseline DOCX parser
 
 **Done:** DOCX files parse into sections, with paragraphs, nested list items (`- `, indented

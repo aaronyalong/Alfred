@@ -3,10 +3,13 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from fpdf import FPDF
+from PIL import Image
 
 from alfred.ingest import IngestError, Limits, SourceFormat, Unit, ingest
 from alfred.ingest.errors import FileTooLargeError, TooManyPagesError
-from alfred.ingest.pdf_parser import NO_TEXT_ISSUE
+from alfred.ingest.issues import visual_issue
+from alfred.ingest.pdf_parser import MIN_VECTOR_PATHS, NO_TEXT_ISSUE, VECTOR_ISSUE
 from alfred.ingest.text import clean_text
 
 MakePdf = Callable[[list[str]], Path]  # the make_pdf fixture from conftest.py
@@ -63,3 +66,47 @@ def test_clean_text_normalizes_whitespace_but_keeps_characters() -> None:
     raw = "Loss  \r\nL(x) = x²   \r\n\r\n\r\n\r\nNext line\r\n"
 
     assert clean_text(raw) == "Loss\nL(x) = x²\n\nNext line"
+
+
+def test_clean_text_turns_pdfium_hyphen_markers_into_hyphens() -> None:
+    assert clean_text("large n￾grams") == "large n-grams"
+
+
+def pdf_page_with(path: Path, draw: Callable[[FPDF], object]) -> Path:
+    """Write a one-page PDF with real text, plus whatever `draw` adds."""
+    pdf = FPDF()  # A4: 210 x 297 mm
+    pdf.set_font("helvetica", size=12)
+    pdf.add_page()
+    pdf.multi_cell(0, 8, "This page has enough text to count as a real page of content.")
+    draw(pdf)
+    pdf.output(str(path))
+    return path
+
+
+def test_flags_large_images_but_not_small_ones(tmp_path: Path) -> None:
+    image = Image.new("RGB", (8, 8))  # A4 page area is 62,370 mm²
+    large = pdf_page_with(  # 15,000 mm² = 24% of the page
+        tmp_path / "large.pdf", lambda pdf: pdf.image(image, x=10, y=40, w=150, h=100)
+    )
+    small = pdf_page_with(  # 400 mm² = 0.6% of the page
+        tmp_path / "small.pdf", lambda pdf: pdf.image(image, x=10, y=40, w=20, h=20)
+    )
+
+    assert ingest(large).page(1).issues == (visual_issue(1),)
+    assert ingest(small).page(1).issues == ()
+
+
+def draw_lines(count: int) -> Callable[[FPDF], None]:
+    def draw(pdf: FPDF) -> None:
+        for i in range(count):
+            pdf.line(10, 40 + i * 0.3, 100, 40 + i * 0.3)
+
+    return draw
+
+
+def test_flags_pages_drawn_with_many_vector_paths(tmp_path: Path) -> None:
+    formula_page = pdf_page_with(tmp_path / "formula.pdf", draw_lines(MIN_VECTOR_PATHS))
+    table_page = pdf_page_with(tmp_path / "table.pdf", draw_lines(20))
+
+    assert ingest(formula_page).page(1).issues == (VECTOR_ISSUE,)
+    assert ingest(table_page).page(1).issues == ()
