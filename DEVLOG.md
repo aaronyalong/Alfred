@@ -4,6 +4,41 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-10-21: Normalized document format and baseline PDF parser
+
+**Done:** every parser now outputs the same immutable `Document → Page → Block` structure.
+File types are detected from their content rather than the extension. Size and page limits are
+checked before parsing. A baseline PDF parser reads each page's text layer.
+
+**Decisions**
+
+- **pypdfium2 instead of PyMuPDF.** Both are fast and accurate, but PyMuPDF is AGPL-licensed,
+  which would impose its terms on the whole deployed web app. pypdfium2 (Chrome's PDFium) is
+  Apache/BSD-licensed.
+- **"Page" means one citable unit:** a PDF page, a slide, or, for DOCX (which has no fixed
+  pages), a section split at headings. `Document.unit` records which, so citations can read
+  "slide 12" or "section 3".
+- **No Unicode normalization.** NFKC would clean up ligatures but also turn `x²` into `x2`.
+  Only whitespace is normalized.
+- **Tests generate their own PDFs.** Real course files can't be committed, so CI couldn't run
+  tests that depend on them.
+
+**First look at a real file** (a 60-page NLP review deck, exported to PDF):
+
+- Text was extracted from all 60 pages in well under a second, and no page was flagged as
+  missing a text layer.
+- **Formulas are lost.** A slide on cosine similarity keeps its sentence ("based on the
+  definition of the dot product…") but not the formula, which is drawn as an image or
+  vector graphic. This is the main thing the docling and vision comparisons need to measure.
+- **The "no text" check has a blind spot.** An image-only slide whose only text is a photo
+  credit (58 characters) passes the 20-character threshold. Character count alone can't tell
+  real content from a caption.
+- **Repeated text is minor.** Only section labels like "BLOCK 2 · N-GRAM LANGUAGE MODELS"
+  repeat, and they're useful topic context, not noise. No header/footer stripping is needed
+  for now.
+
+---
+
 ## 2026-10-20: Project setup
 
 **Done:** repository tooling. uv for environments and locking, ruff for lint and formatting,

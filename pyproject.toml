@@ -7,10 +7,12 @@ requires-python = ">=3.13"
 dependencies = [
     "pydantic>=2.11",
     "pydantic-settings>=2.10",
+    "pypdfium2>=5.14.0",
 ]
 
 [dependency-groups]
 dev = [
+    "fpdf2>=2.8.9",
     "pre-commit>=4.3",
     "pyright>=1.1.405",
     "pytest>=8.4",
