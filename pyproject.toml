@@ -11,6 +11,9 @@ dependencies = [
     "python-pptx>=1.0.2",
 ]
 
+[project.scripts]
+alfred = "alfred.cli:main"
+
 [dependency-groups]
 dev = [
     "fpdf2>=2.8.9",

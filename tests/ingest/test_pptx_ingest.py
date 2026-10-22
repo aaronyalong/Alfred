@@ -13,7 +13,7 @@ from pptx.util import Inches
 
 from alfred.ingest import BlockKind, IngestError, Limits, SourceFormat, Unit, ingest
 from alfred.ingest.errors import FileTooLargeError, TooManyPagesError
-from alfred.ingest.pptx_parser import HIDDEN_ISSUE, IMAGE_ONLY_ISSUE, equation_issue
+from alfred.ingest.pptx_parser import HIDDEN_ISSUE, equation_issue, visual_issue
 
 TITLE_AND_CONTENT = 1  # index of the "Title and Content" layout in the default template
 BLANK = 6
@@ -30,11 +30,11 @@ def add_textbox(slide: Slide, text: str, *, top: float) -> None:
     box.text_frame.text = text
 
 
-def add_picture(slide: Slide) -> None:
+def add_picture(slide: Slide, *, width: float, height: float) -> None:
     image = io.BytesIO()
     Image.new("RGB", (8, 8)).save(image, "PNG")
     image.seek(0)
-    slide.shapes.add_picture(image, Inches(1), Inches(1))
+    slide.shapes.add_picture(image, Inches(1), Inches(1), Inches(width), Inches(height))
 
 
 def test_extracts_title_nested_bullets_and_notes(tmp_path: Path) -> None:
@@ -105,19 +105,20 @@ def test_reads_text_inside_groups(tmp_path: Path) -> None:
     assert page.text == "grouped"
 
 
-def test_flags_slides_that_are_mostly_images(tmp_path: Path) -> None:
+def test_flags_large_images_even_when_the_slide_has_text(tmp_path: Path) -> None:
+    # The default slide is 10 x 7.5 inches; the diagram covers 27% of it, the icon 1%.
     presentation = Presentation()
-    image_only = presentation.slides.add_slide(presentation.slide_layouts[BLANK])
-    add_picture(image_only)
-    add_textbox(image_only, "Photo: CC BY", top=6)
-    with_text = presentation.slides.add_slide(presentation.slide_layouts[BLANK])
-    add_picture(with_text)
-    add_textbox(with_text, "A diagram of the encoder-decoder architecture.", top=6)
+    diagram_slide = presentation.slides.add_slide(presentation.slide_layouts[BLANK])
+    add_picture(diagram_slide, width=5, height=4)
+    add_textbox(diagram_slide, "This diagram shows a VPC with public and private subnets.", top=6)
+    icon_slide = presentation.slides.add_slide(presentation.slide_layouts[BLANK])
+    add_picture(icon_slide, width=1, height=0.75)
+    add_textbox(icon_slide, "A slide with a small logo in the corner.", top=6)
 
     document = ingest(save(presentation, tmp_path))
 
-    assert IMAGE_ONLY_ISSUE in document.page(1).issues
-    assert IMAGE_ONLY_ISSUE not in document.page(2).issues
+    assert document.page(1).issues == (visual_issue(1),)
+    assert document.page(2).issues == ()
 
 
 def test_hidden_slides_are_kept_and_flagged(tmp_path: Path) -> None:

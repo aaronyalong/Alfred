@@ -20,15 +20,23 @@ from pptx.slide import Slide
 
 from alfred.ingest.errors import IngestError, TooManyPagesError
 from alfred.ingest.models import Block, BlockKind, Page
-from alfred.ingest.text import clean_text, has_real_text
+from alfred.ingest.text import clean_text
 
 PARSER_NAME = f"python-pptx-{version('python-pptx')}"
 
 HIDDEN_ISSUE = "hidden slide"
-IMAGE_ONLY_ISSUE = "mostly images or charts; their content is not extracted"
+
+# Pictures and charts covering at least this share of the slide are treated as content
+# (diagrams, plots), not decoration. Measured on a real cloud deck: every diagram covered
+# 27-60% of its slide, while icons and logos stay well below 10%.
+MIN_VISUAL_SHARE = 0.10
 
 _TITLE_TYPES = {PP_PLACEHOLDER.TITLE, PP_PLACEHOLDER.CENTER_TITLE, PP_PLACEHOLDER.VERTICAL_TITLE}
 _MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+
+def visual_issue(count: int) -> str:
+    return f"{count} image(s) or diagram(s) not extracted"
 
 
 def equation_issue(count: int) -> str:
@@ -44,11 +52,15 @@ def parse_pptx(path: Path, max_pages: int) -> tuple[Page, ...]:
     slides = list(presentation.slides)
     if len(slides) > max_pages:
         raise TooManyPagesError(f"{path.name} has {len(slides)} slides; the limit is {max_pages}")
+    slide_area = (presentation.slide_width or 0) * (presentation.slide_height or 0)
     # Hidden slides are kept, so numbers match what PowerPoint shows.
-    return tuple(_parse_slide(slide, number=n) for n, slide in enumerate(slides, start=1))
+    return tuple(
+        _parse_slide(slide, number=n, slide_area=slide_area)
+        for n, slide in enumerate(slides, start=1)
+    )
 
 
-def _parse_slide(slide: Slide, *, number: int) -> Page:
+def _parse_slide(slide: Slide, *, number: int, slide_area: int) -> Page:
     shapes = _reading_order(_flatten(slide.shapes))
     blocks = [block for shape in shapes if (block := _to_block(shape))]
     if slide.has_notes_slide and (notes_frame := slide.notes_slide.notes_text_frame):
@@ -59,10 +71,9 @@ def _parse_slide(slide: Slide, *, number: int) -> Page:
     issues: list[str] = []
     if slide.element.get("show") == "0":
         issues.append(HIDDEN_ISSUE)
-    visuals = sum(1 for shape in shapes if _is_visual(shape))
-    body = " ".join(b.text for b in blocks if b.kind in (BlockKind.TEXT, BlockKind.TABLE))
-    if visuals and not has_real_text(body):
-        issues.append(IMAGE_ONLY_ISSUE)
+    visuals = sum(1 for shape in shapes if _is_large_visual(shape, slide_area))
+    if visuals:
+        issues.append(visual_issue(visuals))
     equations = len(slide.element.findall(f".//{{{_MATH_NS}}}oMath"))
     if equations:
         issues.append(equation_issue(equations))
@@ -109,6 +120,10 @@ def _is_title(shape: BaseShape) -> bool:
     return shape.is_placeholder and shape.placeholder_format.type in _TITLE_TYPES
 
 
-def _is_visual(shape: BaseShape) -> bool:
-    """Pictures, charts, SmartArt and media: content that carries no extractable text."""
-    return isinstance(shape, Picture) or (isinstance(shape, GraphicFrame) and not shape.has_table)
+def _is_large_visual(shape: BaseShape, slide_area: int) -> bool:
+    """A picture, chart, SmartArt or media object big enough to be content, not decoration."""
+    is_visual = isinstance(shape, Picture) or (
+        isinstance(shape, GraphicFrame) and not shape.has_table
+    )
+    area = (shape.width or 0) * (shape.height or 0)
+    return is_visual and slide_area > 0 and area / slide_area >= MIN_VISUAL_SHARE

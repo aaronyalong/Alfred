@@ -4,6 +4,34 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-10-21: `alfred ingest` command, and the first real PPTX
+
+**Done:** `alfred ingest <file> [--page N] [--json]` prints a summary, page issues and every
+block, or the full `Document` as JSON (useful for saving and diffing parser output later).
+It uses argparse from the standard library; a CLI framework isn't worth a dependency for
+one command.
+
+**First real deck** (19-slide cloud architecture lecture, parsed in under 0.5 s):
+
+- **The "image-only slide" rule was wrong: it flagged 1 of 16 diagram slides.** It only fired
+  when a slide had almost no text, but most diagram slides also have a sentence or two of
+  text. Measured: every picture in the deck covers 27–60% of its slide, and these diagrams
+  *are* the lecture content.
+  **Fix:** flag every picture or chart covering at least 10% of the slide, whatever the amount
+  of text. Result: 16 of 16 diagram slides flagged, and small icons are still ignored.
+- **No title blocks were found.** The deck uses no title placeholders: every slide is a blank
+  layout with text boxes, and the title is just the first line of the first box. Detecting
+  titles from placeholders only works for decks built from the template's layouts. I'm not
+  adding a heuristic (e.g. font size) yet. Generation sees the text either way, and the
+  docling comparison will show whether layout-based title detection does better.
+- **No speaker notes in this deck**, so that feature is still untested on real data.
+
+**Takeaway for the course:** in this deck, most of the content is diagrams. For cloud
+lectures, extracting text alone loses most of what matters, so the vision experiment
+(sending slide images to Claude) matters more than expected.
+
+---
+
 ## 2026-10-21: Baseline PPTX parser
 
 **Done:** PPTX files parse into one `Page` per slide, with titles, nested bullets, tables
