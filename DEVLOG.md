@@ -4,6 +4,43 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-10-21: Baseline DOCX parser
+
+**Done:** DOCX files parse into sections, with paragraphs, nested list items (`- `, indented
+by level) and tables, in document order. Images and equations are flagged per section.
+
+**The plan didn't survive the first real file.** The plan was to split DOCX at headings,
+because Word documents have no fixed pages. The first real file (a 3-page exam review)
+uses **no heading styles at all**: 83 "Normal" and 45 "List Paragraph" paragraphs. Its
+headings are plain or bold text, with no page breaks. Splitting at headings would have made
+the whole file one section, and every citation would have read "section 1".
+
+**Decision: headings when present, plus a size cap.** A new section starts at every heading
+*and* whenever a section would grow past ~3,000 characters (about one printed page),
+always between paragraphs, so quotes are never cut. One rule covers both well-structured
+and hand-formatted documents. Alternatives rejected:
+
+- *Bold short lines as headings:* fragile. It would have picked the letterhead ("San Jose
+  State University") and missed the "Part II" and "Part III" headings, which aren't bold.
+- *Converting to PDF via LibreOffice for real page numbers:* a ~500 MB dependency, and its
+  page breaks don't match Word's anyway.
+
+The citation's quote, not the section number, is what a student uses to find the spot.
+
+**"Keep with next."** The size split first ended section 2 with the line "Part III:
+Application Problems and Solutions (30%)" and started section 3 with that part's content.
+Now a short, heading-like last line (under 80 chars, not a list item, no final period) moves
+into the next section. Result on the real file: 3 sections, each starting where a reader
+would expect.
+
+**Product insight: this document isn't lecture content, it's an exam scope.** It lists
+which subjects the final covers and how much each part weighs. Generating questions *from*
+it would produce questions about the exam format. It is far more useful as *guidance*,
+steering which lecture topics get questions and with what weight. Files may therefore need
+a role, *course material* vs. *exam scope / instructions*. To be designed in Phase 2/3.
+
+---
+
 ## 2026-10-21: `alfred ingest` command, and the first real PPTX
 
 **Done:** `alfred ingest <file> [--page N] [--json]` prints a summary, page issues and every

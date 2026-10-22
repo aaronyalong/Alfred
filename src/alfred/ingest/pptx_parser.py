@@ -19,6 +19,7 @@ from pptx.shapes.picture import Picture
 from pptx.slide import Slide
 
 from alfred.ingest.errors import IngestError, TooManyPagesError
+from alfred.ingest.issues import MATH_NS, equation_issue, visual_issue
 from alfred.ingest.models import Block, BlockKind, Page
 from alfred.ingest.text import clean_text
 
@@ -32,15 +33,6 @@ HIDDEN_ISSUE = "hidden slide"
 MIN_VISUAL_SHARE = 0.10
 
 _TITLE_TYPES = {PP_PLACEHOLDER.TITLE, PP_PLACEHOLDER.CENTER_TITLE, PP_PLACEHOLDER.VERTICAL_TITLE}
-_MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
-
-
-def visual_issue(count: int) -> str:
-    return f"{count} image(s) or diagram(s) not extracted"
-
-
-def equation_issue(count: int) -> str:
-    return f"{count} equation(s) not extracted"
 
 
 def parse_pptx(path: Path, max_pages: int) -> tuple[Page, ...]:
@@ -74,7 +66,7 @@ def _parse_slide(slide: Slide, *, number: int, slide_area: int) -> Page:
     visuals = sum(1 for shape in shapes if _is_large_visual(shape, slide_area))
     if visuals:
         issues.append(visual_issue(visuals))
-    equations = len(slide.element.findall(f".//{{{_MATH_NS}}}oMath"))
+    equations = len(slide.element.findall(f".//{{{MATH_NS}}}oMath"))
     if equations:
         issues.append(equation_issue(equations))
 

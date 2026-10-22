@@ -13,7 +13,8 @@ from pptx.util import Inches
 
 from alfred.ingest import BlockKind, IngestError, Limits, SourceFormat, Unit, ingest
 from alfred.ingest.errors import FileTooLargeError, TooManyPagesError
-from alfred.ingest.pptx_parser import HIDDEN_ISSUE, equation_issue, visual_issue
+from alfred.ingest.issues import equation_issue, visual_issue
+from alfred.ingest.pptx_parser import HIDDEN_ISSUE
 
 TITLE_AND_CONTENT = 1  # index of the "Title and Content" layout in the default template
 BLANK = 6

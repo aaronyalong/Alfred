@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from alfred.ingest import pdf_parser, pptx_parser
+from alfred.ingest import docx_parser, pdf_parser, pptx_parser
 from alfred.ingest.detect import detect_format
 from alfred.ingest.errors import FileTooLargeError, UnsupportedFormatError
 from alfred.ingest.models import Document, Page, SourceFormat, Unit
@@ -34,6 +34,7 @@ class _Parser:
 _PARSERS = {
     SourceFormat.PDF: _Parser(pdf_parser.PARSER_NAME, Unit.PAGE, pdf_parser.parse_pdf),
     SourceFormat.PPTX: _Parser(pptx_parser.PARSER_NAME, Unit.SLIDE, pptx_parser.parse_pptx),
+    SourceFormat.DOCX: _Parser(docx_parser.PARSER_NAME, Unit.SECTION, docx_parser.parse_docx),
 }
 
 

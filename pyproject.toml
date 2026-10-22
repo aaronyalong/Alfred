@@ -8,6 +8,7 @@ dependencies = [
     "pydantic>=2.11",
     "pydantic-settings>=2.10",
     "pypdfium2>=5.14.0",
+    "python-docx>=1.2.0",
     "python-pptx>=1.0.2",
 ]
 
