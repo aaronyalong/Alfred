@@ -2,12 +2,13 @@
 
 from alfred.ingest.errors import IngestError
 from alfred.ingest.models import Block, BlockKind, Document, Page, SourceFormat, Unit
-from alfred.ingest.pipeline import Limits, ingest
+from alfred.ingest.pipeline import Engine, Limits, ingest
 
 __all__ = [
     "Block",
     "BlockKind",
     "Document",
+    "Engine",
     "IngestError",
     "Limits",
     "Page",

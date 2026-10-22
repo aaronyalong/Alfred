@@ -49,6 +49,7 @@ Requires [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync                          # create .venv and install dependencies
+uv sync --extra docling          # optional: the docling ingestion engine (PyTorch, CPU-only)
 uv run pre-commit install        # run lint and safety checks on every commit
 cp .env.example .env             # then add your Anthropic API key
 uv run pytest                    # tests

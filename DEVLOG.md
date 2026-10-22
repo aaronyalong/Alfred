@@ -4,6 +4,42 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-10-22: docling as a second ingestion engine
+
+**Done:** `ingest(..., engine=...)` and `alfred ingest --engine` select `baseline` (default),
+`docling`, or `docling-formulas`. All three produce the same `Document`, which is what makes
+them comparable. docling is an optional extra (`uv sync --extra docling`), imported only
+when used, so CI and the core install never load PyTorch.
+
+**Setup lesson: CPU-only PyTorch.** No CUDA GPU here (AMD integrated graphics), but on
+Linux the default PyTorch wheels bundle NVIDIA CUDA libraries. The first attempt pointed
+torch at PyTorch's CPU index via `[tool.uv.sources]`, and uv downloaded the CUDA build anyway.
+Reason: **uv only applies sources to direct dependencies**, and torch was transitive
+(docling → torch). Listing `torch` and `torchvision` directly in the extra fixed it: 0
+NVIDIA packages in the lockfile, and a 1.5 GB environment.
+
+**First observations, before the benchmark:**
+
+- **PDF:** a layout model per page finds titles (as section headers), tables, formulas,
+  pictures, and running headers/footers (dropped as noise). Full 60-page PDF: **70 s and
+  3.1 GB RAM**, vs. 0.5 s for the baseline. A deployed docling worker needs ≥4 GB RAM.
+- **Formulas are located but empty by default.** Transcribing them needs a second model
+  (`docling-formulas`): page 30 went from 2.1 s to 13.9 s, and the cosine formula came back
+  as LaTeX. One transcription error: `\cos` where the slide says "cosine".
+- **docling flags formulas on 6 pages the baseline never flagged** (20, 23, 25, 28, 38,
+  44). The baseline extracts those as text, possibly garbled; the benchmark will tell.
+- **PPTX: no gain (negative result).** 0.4 s, slide numbers kept, but all 16 diagrams come
+  back as empty pictures (no OCR outside the PDF pipeline), and no titles are detected.
+- **DOCX: unsupported.** docling's DOCX output has no page or position information on any
+  of its 131 items, so nothing it extracts could be cited. DOCX stays with the baseline.
+
+**Benchmark labels committed before any benchmark run.** `evals/ingestion/labels.toml`
+lists 37 facts across 13 pages (text, table, formula and diagram pages), written from
+rendered page images. Committing them before the results exist means the git history
+shows they weren't tuned to any engine's output.
+
+---
+
 ## 2026-10-22: PDF pages with images and vector drawings are flagged
 
 **Problem:** on the 60-page NLP review PDF, the baseline flagged **0 pages**, yet formulas and

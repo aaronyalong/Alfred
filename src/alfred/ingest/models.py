@@ -28,6 +28,7 @@ class BlockKind(StrEnum):
     TITLE = "title"
     TEXT = "text"
     TABLE = "table"
+    FORMULA = "formula"  # LaTeX, when an engine can transcribe formulas
     NOTES = "notes"  # PPTX speaker notes
 
 

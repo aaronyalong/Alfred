@@ -1,0 +1,155 @@
+# Ingestion benchmark labels: what a good extraction of each page must contain.
+#
+# Facts were written from rendered page images and slide pictures, BEFORE running any
+# engine on these pages, so they aren't tuned to one parser's output.
+#
+# Each fact is a list of accepted spellings; matching any one counts. Before comparing, both
+# the fact and the extracted text are normalized (lowercase, no whitespace, no LaTeX braces
+# or sub/superscript marks, Unicode math symbols spelled as LaTeX names), so
+# "P(w_{k}|w_{k-1})" and "P(wk|wk−1)" are the same fact.
+#
+# A fact only counts when found on the labeled page, so a parser that mixes up page
+# numbers is penalized. Course files are git-ignored and matched by SHA-256, so these labels
+# refuse to apply to a different version of a file.
+#
+# kind: text (plain text layer) | table | formula (drawn as vector graphics) | diagram (image)
+
+[[files]]
+name = "Midterm Review Fall 2026.pdf"
+sha256 = "473c30d933443bcc786aa52c435ceb0e5c256a710315eebfca79fe4e8ca6e46c"
+
+[[files]]
+name = "AWS-VPC-VPN-EC2-Architecture.pptx"
+sha256 = "2b07563504be17e149518a2d0548020df679c31a1ecb648f84496a462d286268"
+
+# --- NLP midterm review (PDF) -------------------------------------------------------------
+
+[[pages]]
+file = "Midterm Review Fall 2026.pdf"
+page = 10
+kind = "text"
+facts = [
+    ["sophisticated approach than stemming"],
+    ["nltk.WordNetLemmatizer()"],
+    ["IPhones to iphon"],
+]
+
+[[pages]]
+file = "Midterm Review Fall 2026.pdf"
+page = 17
+kind = "formula"
+facts = [
+    ["P(w_{1:n})"],
+    ["P(w_k|w_{k-1})"],
+    ["P(w_k|w_{1:k-1})"],
+]
+
+[[pages]]
+file = "Midterm Review Fall 2026.pdf"
+page = 19
+kind = "formula"
+facts = [
+    ["log(p_1 × p_2 × p_3 × p_4)"],
+    ["exp(log p_1 + log p_2"],
+]
+
+[[pages]]
+file = "Midterm Review Fall 2026.pdf"
+page = 30
+kind = "formula"
+facts = [
+    ["cosine(v, w)"],
+    ["sum_{i=1}^{N} v_i w_i"],
+    ["|a||b| cos θ"],
+]
+
+[[pages]]
+file = "Midterm Review Fall 2026.pdf"
+page = 42
+kind = "formula"
+facts = [
+    ["softmax(mask("],
+    ["q2·k2"],
+    ["q4·k4"],
+]
+
+[[pages]]
+file = "Midterm Review Fall 2026.pdf"
+page = 46
+kind = "diagram"
+facts = [
+    ["Query Token"],
+    ["Value Token"],
+    ["N x d_k", "N × d_k"],
+]
+
+[[pages]]
+file = "Midterm Review Fall 2026.pdf"
+page = 48
+kind = "formula"
+facts = [
+    ["softmax(u/τ)"],
+    ["0 ≤ τ ≤ 1"],
+]
+
+[[pages]]
+file = "Midterm Review Fall 2026.pdf"
+page = 53
+kind = "table"
+facts = [
+    ["cat | 3 | 0.38 | 1.00 | 0.71"],
+    ["fish | 0 | 0.28 | 0.00 | 0.04"],
+    ["greedy argmax"],
+]
+
+# --- Cloud architecture deck (PPTX) ----------------------------------------------------------
+
+[[pages]]
+file = "AWS-VPC-VPN-EC2-Architecture.pptx"
+page = 1
+kind = "text"
+facts = [
+    ["Amazon VPC is the networking layer for Amazon EC2"],
+    ["Route table"],
+]
+
+[[pages]]
+file = "AWS-VPC-VPN-EC2-Architecture.pptx"
+page = 3
+kind = "diagram"
+facts = [
+    ["reflection attacks"],
+    ["TCP: 3306"],
+    ["DMZ Public subnet"],
+    ["MySQL Database Security Group"],
+]
+
+[[pages]]
+file = "AWS-VPC-VPN-EC2-Architecture.pptx"
+page = 9
+kind = "diagram"
+facts = [
+    ["IPSec VPN Tunnel"],
+    ["Availability Zone 1b"],
+    ["Prod DR"],
+]
+
+[[pages]]
+file = "AWS-VPC-VPN-EC2-Architecture.pptx"
+page = 13
+kind = "diagram"
+facts = [
+    ["unionfs"],
+    ["s3 sync"],
+    ["Invalidate Cache"],
+]
+
+[[pages]]
+file = "AWS-VPC-VPN-EC2-Architecture.pptx"
+page = 17
+kind = "diagram"
+facts = [
+    ["Blue AMI"],
+    ["Chef Server"],
+    ["Service CNAME"],
+]

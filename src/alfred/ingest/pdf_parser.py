@@ -13,13 +13,12 @@ import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_c
 
 from alfred.ingest.errors import IngestError, TooManyPagesError
-from alfred.ingest.issues import MIN_VISUAL_SHARE, visual_issue
+from alfred.ingest.issues import MIN_VISUAL_SHARE, NO_TEXT_ISSUE, visual_issue
 from alfred.ingest.models import Block, BlockKind, Page
 from alfred.ingest.text import clean_text, has_real_text
 
 PARSER_NAME = f"pypdfium2-{version('pypdfium2')}"
 
-NO_TEXT_ISSUE = "little or no text layer (scanned or image-only page?)"
 VECTOR_ISSUE = "formula, chart or diagram drawn as vector graphics; not extracted"
 
 # Formulas and diagrams exported from slides are often drawn as thousands of outline shapes

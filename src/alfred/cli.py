@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from alfred.ingest import Document, IngestError, ingest
+from alfred.ingest import Document, Engine, IngestError, ingest
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -15,13 +15,16 @@ def main(argv: list[str] | None = None) -> int:
     ingest_cmd.add_argument("file", type=Path)
     ingest_cmd.add_argument("--page", type=int, help="show only this page/slide/section")
     ingest_cmd.add_argument("--json", action="store_true", help="print the Document as JSON")
+    ingest_cmd.add_argument(
+        "--engine", type=Engine, choices=list(Engine), default=Engine.BASELINE, help="parser to use"
+    )
 
     args = parser.parse_args(argv)
     if not args.file.is_file():
         parser.error(f"no such file: {args.file}")
 
     try:
-        document = ingest(args.file)
+        document = ingest(args.file, engine=args.engine)
         if args.page is not None:
             document.page(args.page)  # fail early on a page number that doesn't exist
     except (IngestError, KeyError) as e:

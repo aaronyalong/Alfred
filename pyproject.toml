@@ -15,6 +15,15 @@ dependencies = [
 [project.scripts]
 alfred = "alfred.cli:main"
 
+[project.optional-dependencies]
+docling = [
+    "docling>=2.142.0",
+    # Listed directly (docling already depends on them) so that [tool.uv.sources] applies:
+    # uv only honors sources for direct dependencies.
+    "torch",
+    "torchvision",
+]
+
 [dependency-groups]
 dev = [
     "fpdf2>=2.8.9",
@@ -27,6 +36,17 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# docling needs PyTorch. The default Linux wheels bundle NVIDIA CUDA libraries (several GB);
+# the CPU-only build is enough here, so torch and torchvision come from PyTorch's CPU index.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true  # only packages listed in [tool.uv.sources] use this index
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
 
 [tool.ruff]
 line-length = 100

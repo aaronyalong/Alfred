@@ -8,8 +8,8 @@ from PIL import Image
 
 from alfred.ingest import IngestError, Limits, SourceFormat, Unit, ingest
 from alfred.ingest.errors import FileTooLargeError, TooManyPagesError
-from alfred.ingest.issues import visual_issue
-from alfred.ingest.pdf_parser import MIN_VECTOR_PATHS, NO_TEXT_ISSUE, VECTOR_ISSUE
+from alfred.ingest.issues import NO_TEXT_ISSUE, visual_issue
+from alfred.ingest.pdf_parser import MIN_VECTOR_PATHS, VECTOR_ISSUE
 from alfred.ingest.text import clean_text
 
 MakePdf = Callable[[list[str]], Path]  # the make_pdf fixture from conftest.py

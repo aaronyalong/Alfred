@@ -7,6 +7,8 @@ MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"  # Office
 # diagram covered 27-60% of its slide, while icons and logos stay well below 10%.
 MIN_VISUAL_SHARE = 0.10
 
+NO_TEXT_ISSUE = "little or no text layer (scanned or image-only page?)"
+
 
 def visual_issue(count: int) -> str:
     return f"{count} image(s) or diagram(s) not extracted"

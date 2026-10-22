@@ -4,11 +4,12 @@ import hashlib
 import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
-from alfred.ingest import docx_parser, pdf_parser, pptx_parser
+from alfred.ingest import docling_parser, docx_parser, pdf_parser, pptx_parser
 from alfred.ingest.detect import detect_format
-from alfred.ingest.errors import FileTooLargeError, UnsupportedFormatError
+from alfred.ingest.errors import FileTooLargeError
 from alfred.ingest.models import Document, Page, SourceFormat, Unit
 
 MB = 1024 * 1024
@@ -24,21 +25,34 @@ class Limits:
     max_unpacked_bytes: int = 200 * MB
 
 
+class Engine(StrEnum):
+    """Which parsers to use. The baseline is the default; the others are compared against it."""
+
+    BASELINE = "baseline"
+    DOCLING = "docling"
+    DOCLING_FORMULAS = "docling-formulas"  # also transcribes formulas to LaTeX (slower)
+
+
 @dataclass(frozen=True)
 class _Parser:
     name: str
-    unit: Unit
     parse: Callable[[Path, int], tuple[Page, ...]]
 
 
-_PARSERS = {
-    SourceFormat.PDF: _Parser(pdf_parser.PARSER_NAME, Unit.PAGE, pdf_parser.parse_pdf),
-    SourceFormat.PPTX: _Parser(pptx_parser.PARSER_NAME, Unit.SLIDE, pptx_parser.parse_pptx),
-    SourceFormat.DOCX: _Parser(docx_parser.PARSER_NAME, Unit.SECTION, docx_parser.parse_docx),
+_BASELINE_PARSERS = {
+    SourceFormat.PDF: _Parser(pdf_parser.PARSER_NAME, pdf_parser.parse_pdf),
+    SourceFormat.PPTX: _Parser(pptx_parser.PARSER_NAME, pptx_parser.parse_pptx),
+    SourceFormat.DOCX: _Parser(docx_parser.PARSER_NAME, docx_parser.parse_docx),
+}
+
+_UNITS = {
+    SourceFormat.PDF: Unit.PAGE,
+    SourceFormat.PPTX: Unit.SLIDE,
+    SourceFormat.DOCX: Unit.SECTION,
 }
 
 
-def ingest(path: Path, limits: Limits | None = None) -> Document:
+def ingest(path: Path, limits: Limits | None = None, engine: Engine = Engine.BASELINE) -> Document:
     limits = limits or Limits()
 
     # Cheap checks first, before any parser touches the file.
@@ -48,19 +62,26 @@ def ingest(path: Path, limits: Limits | None = None) -> Document:
             f"{path.name} is {size / MB:.1f} MB; the limit is {limits.max_bytes / MB:.0f} MB"
         )
     source_format = detect_format(path)
-    parser = _PARSERS.get(source_format)
-    if parser is None:
-        raise UnsupportedFormatError(f"{source_format.upper()} files are not supported yet")
     if source_format in (SourceFormat.PPTX, SourceFormat.DOCX):
         _check_unpacked_size(path, limits.max_unpacked_bytes)
+
+    if engine is Engine.BASELINE:
+        parser = _BASELINE_PARSERS[source_format]
+        name, pages = parser.name, parser.parse(path, limits.max_pages)
+    else:
+        formulas = engine is Engine.DOCLING_FORMULAS
+        name = docling_parser.parser_name(formulas=formulas)
+        pages = docling_parser.parse_with_docling(
+            path, limits.max_pages, source_format=source_format, formulas=formulas
+        )
 
     return Document(
         source_name=path.name,
         source_sha256=_sha256(path),
         format=source_format,
-        unit=parser.unit,
-        parser=parser.name,
-        pages=parser.parse(path, limits.max_pages),
+        unit=_UNITS[source_format],
+        parser=name,
+        pages=pages,
     )
 
 
