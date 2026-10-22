@@ -6,7 +6,7 @@ import pytest
 
 from alfred.ingest import IngestError, Limits, SourceFormat, Unit, ingest
 from alfred.ingest.errors import FileTooLargeError, TooManyPagesError
-from alfred.ingest.pdf import NO_TEXT_ISSUE
+from alfred.ingest.pdf_parser import NO_TEXT_ISSUE
 from alfred.ingest.text import clean_text
 
 MakePdf = Callable[[list[str]], Path]  # the make_pdf fixture from conftest.py

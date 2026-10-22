@@ -4,6 +4,32 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-10-21: Baseline PPTX parser
+
+**Done:** PPTX files parse into one `Page` per slide, with titles, nested bullets, tables
+and speaker notes kept as separate blocks. This structure is lost when a deck is exported to PDF.
+
+**Decisions**
+
+- **Reading order is reconstructed.** PowerPoint stores shapes in stacking order (the order
+  they were added), not reading order. Blocks are sorted title first, then top to bottom and
+  left to right.
+- **Hidden slides are kept and flagged, not dropped.** Dropping them would shift every later
+  slide number, and citations would point at the wrong slide.
+- **Speaker notes are their own block kind.** Lecturers often explain the slide there, so they
+  are useful context. Keeping them separate lets later steps decide whether a question may be
+  based on notes the student never saw on the slide.
+- **What isn't extracted is flagged, not silently dropped.** Equations (stored as Office
+  Math), charts, SmartArt and images produce page issues instead of missing content.
+  PowerPoint equations are structured XML, so unlike in a PDF export they *can* be
+  extracted. That is a candidate improvement once a real deck with formulas is available.
+- **Unpacked-size limit for PPTX/DOCX.** Both are zip archives, and python-pptx loads every
+  part into memory. A 200 MB cap on the total unpacked size stops zip bombs before parsing.
+
+**Not yet validated on a real deck.** All tests use generated presentations.
+
+---
+
 ## 2026-10-21: Normalized document format and baseline PDF parser
 
 **Done:** every parser now outputs the same immutable `Document → Page → Block` structure.

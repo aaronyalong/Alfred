@@ -12,16 +12,14 @@ import pypdfium2 as pdfium
 
 from alfred.ingest.errors import IngestError, TooManyPagesError
 from alfred.ingest.models import Block, BlockKind, Page
-from alfred.ingest.text import clean_text
+from alfred.ingest.text import clean_text, has_real_text
 
 PARSER_NAME = f"pypdfium2-{version('pypdfium2')}"
 
-# Fewer non-whitespace characters than this means the page is probably a scan or an image.
-MIN_TEXT_CHARS = 20
 NO_TEXT_ISSUE = "little or no text layer (scanned or image-only page?)"
 
 
-def parse_pdf(path: Path, *, max_pages: int) -> tuple[Page, ...]:
+def parse_pdf(path: Path, max_pages: int) -> tuple[Page, ...]:
     try:
         pdf = pdfium.PdfDocument(path)
     except pdfium.PdfiumError as e:  # damaged, encrypted, or not really a PDF
@@ -44,6 +42,5 @@ def _parse_page(page: pdfium.PdfPage, *, number: int) -> Page:
         page.close()
 
     blocks = (Block(kind=BlockKind.TEXT, text=text),) if text else ()
-    visible_chars = len("".join(text.split()))
-    issues = (NO_TEXT_ISSUE,) if visible_chars < MIN_TEXT_CHARS else ()
+    issues = () if has_real_text(text) else (NO_TEXT_ISSUE,)
     return Page(number=number, blocks=blocks, issues=issues)
