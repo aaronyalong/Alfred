@@ -59,6 +59,13 @@ def parse_with_docling(
     return _to_pages(result.document)
 
 
+def warm_up(*, formulas: bool) -> None:
+    """Load the PDF models now, so later timings measure conversion, not one-time loading."""
+    from docling.datamodel.base_models import InputFormat  # pyright: ignore[reportMissingImports]
+
+    _converter(formulas).initialize_pipeline(InputFormat.PDF)
+
+
 @cache
 def _converter(formulas: bool) -> Any:
     """Build a converter once per setting: loading the models takes seconds."""

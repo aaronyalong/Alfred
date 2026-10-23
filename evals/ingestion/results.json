@@ -1,0 +1,423 @@
+{
+  "run_at": "2026-10-23T03:51:46Z",
+  "engines": [
+    {
+      "engine": "baseline",
+      "parsers": [
+        "pypdfium2-5.14.0",
+        "python-pptx-1.0.2"
+      ],
+      "seconds": 0.38,
+      "pages_parsed": 79,
+      "pages": [
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 10,
+          "kind": "text",
+          "found": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 17,
+          "kind": "formula",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 19,
+          "kind": "formula",
+          "found": [
+            false,
+            false
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 30,
+          "kind": "formula",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 42,
+          "kind": "formula",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 46,
+          "kind": "diagram",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 48,
+          "kind": "formula",
+          "found": [
+            false,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 53,
+          "kind": "table",
+          "found": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 1,
+          "kind": "text",
+          "found": [
+            true,
+            true
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 3,
+          "kind": "diagram",
+          "found": [
+            true,
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 9,
+          "kind": "diagram",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 13,
+          "kind": "diagram",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 17,
+          "kind": "diagram",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        }
+      ],
+      "errors": []
+    },
+    {
+      "engine": "docling",
+      "parsers": [
+        "docling-2.142.0"
+      ],
+      "seconds": 60.78,
+      "pages_parsed": 79,
+      "pages": [
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 10,
+          "kind": "text",
+          "found": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 17,
+          "kind": "formula",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 19,
+          "kind": "formula",
+          "found": [
+            false,
+            false
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 30,
+          "kind": "formula",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 42,
+          "kind": "formula",
+          "found": [
+            false,
+            true,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 46,
+          "kind": "diagram",
+          "found": [
+            true,
+            true,
+            false
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 48,
+          "kind": "formula",
+          "found": [
+            false,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 53,
+          "kind": "table",
+          "found": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 1,
+          "kind": "text",
+          "found": [
+            true,
+            true
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 3,
+          "kind": "diagram",
+          "found": [
+            true,
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 9,
+          "kind": "diagram",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 13,
+          "kind": "diagram",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 17,
+          "kind": "diagram",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        }
+      ],
+      "errors": []
+    },
+    {
+      "engine": "docling-formulas",
+      "parsers": [
+        "docling-2.142.0+formulas"
+      ],
+      "seconds": 153.64,
+      "pages_parsed": 79,
+      "pages": [
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 10,
+          "kind": "text",
+          "found": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 17,
+          "kind": "formula",
+          "found": [
+            false,
+            true,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 19,
+          "kind": "formula",
+          "found": [
+            true,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 30,
+          "kind": "formula",
+          "found": [
+            false,
+            true,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 42,
+          "kind": "formula",
+          "found": [
+            false,
+            true,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 46,
+          "kind": "diagram",
+          "found": [
+            true,
+            true,
+            false
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 48,
+          "kind": "formula",
+          "found": [
+            true,
+            true
+          ]
+        },
+        {
+          "file": "Midterm Review Fall 2026.pdf",
+          "page": 53,
+          "kind": "table",
+          "found": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 1,
+          "kind": "text",
+          "found": [
+            true,
+            true
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 3,
+          "kind": "diagram",
+          "found": [
+            true,
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 9,
+          "kind": "diagram",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 13,
+          "kind": "diagram",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        },
+        {
+          "file": "AWS-VPC-VPN-EC2-Architecture.pptx",
+          "page": 17,
+          "kind": "diagram",
+          "found": [
+            false,
+            false,
+            false
+          ]
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

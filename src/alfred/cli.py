@@ -4,7 +4,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from alfred.ingest import Document, Engine, IngestError, ingest
+from alfred.evals import ingestion as ingestion_eval
+from alfred.ingest import Document, Engine, IngestError, docling_parser, ingest
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,11 +19,30 @@ def main(argv: list[str] | None = None) -> int:
     ingest_cmd.add_argument(
         "--engine", type=Engine, choices=list(Engine), default=Engine.BASELINE, help="parser to use"
     )
+    ingest_cmd.set_defaults(handler=_ingest)
+
+    eval_cmd = commands.add_parser("eval", help="run an evaluation")
+    evals = eval_cmd.add_subparsers(dest="evaluation", required=True)
+    bench = evals.add_parser("ingestion", help="score ingestion engines against labeled facts")
+    bench.add_argument(
+        "--engine",
+        type=Engine,
+        choices=list(Engine),
+        action="append",
+        help="engine to run (repeatable; default: every installed engine)",
+    )
+    bench.add_argument("--data", type=Path, default=Path("data/private"))
+    bench.add_argument("--labels", type=Path, default=Path("evals/ingestion/labels.toml"))
+    bench.add_argument("--out", type=Path, help="also write the full report as JSON")
+    bench.set_defaults(handler=_eval_ingestion)
 
     args = parser.parse_args(argv)
+    return args.handler(parser, args)
+
+
+def _ingest(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if not args.file.is_file():
         parser.error(f"no such file: {args.file}")
-
     try:
         document = ingest(args.file, engine=args.engine)
         if args.page is not None:
@@ -32,6 +52,22 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(document.model_dump_json(indent=2) if args.json else render(document, args.page))
+    return 0
+
+
+def _eval_ingestion(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    engines = args.engine or [
+        e for e in Engine if e is Engine.BASELINE or docling_parser.is_installed()
+    ]
+    try:
+        report = ingestion_eval.run(ingestion_eval.load_labels(args.labels), args.data, engines)
+    except ingestion_eval.BenchmarkError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    print(ingestion_eval.render(report))
+    if args.out:
+        args.out.write_text(report.model_dump_json(indent=2) + "\n", encoding="utf-8")
     return 0
 
 

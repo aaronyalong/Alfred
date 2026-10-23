@@ -4,6 +4,59 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-10-22: Ingestion benchmark: first results
+
+**Setup:** `alfred eval ingestion` scores each engine on the 37 hand-written facts
+(13 pages: an NLP review PDF and a cloud architecture PPTX). A fact counts only if it is
+found on its labeled page. Models are loaded before timing starts. Scores are in
+`evals/ingestion/results.json` (no course text, just found/missed per fact).
+
+| engine | all facts | text | table | formula | diagram | time (79 pages) |
+|---|---|---|---|---|---|---|
+| baseline | 10/37 (27%) | 5/5 | 3/3 | 1/13 | 1/16 | **0.4 s** |
+| docling | 14/37 (38%) | 5/5 | 3/3 | 3/13 | 3/16 | 61 s |
+| docling-formulas | **21/37 (57%)** | 5/5 | 3/3 | **10/13** | 3/16 | 154 s |
+
+Per PDF page, docling takes ~1.0 s and docling-formulas ~2.5 s (PPTX takes under 1 s
+in total), and docling needs ~3 GB of RAM.
+
+**Scorer fix after the first run, disclosed.** The first run gave docling-formulas 9/13
+on formulas. One miss was the scorer's fault: the model wrote `w_{1 \colon k-1}`, and
+`\colon` *is* a colon in LaTeX. The normalizer now maps `\colon` → `:` (and `\mid` → `|`,
+the same kind of equivalence). The fix applies to all engines, and only this one fact
+changed. Other near misses were deliberately **not** "fixed", e.g. `\cos` where the slide
+says "cosine".
+
+**What the numbers say:**
+
+1. **Text and tables: the baseline is already perfect** (8/8 facts, about 400× faster).
+   docling adds nothing on these pages.
+2. **Formulas: docling-formulas is the clear winner (10/13 vs 1/13),** but its errors
+   change meaning. On the attention-mask slide it read `\text{mask}` as `\max`, giving
+   `softmax(max(QKᵀ/√d_k))`. A question generated from that would teach something wrong.
+   Every formula extraction will need verification downstream.
+3. **Diagrams: nobody solves them (≤3/16).** On the PPTX, all engines score 1/13, because
+   docling doesn't OCR images in PPTX at all. On the PDF attention diagram, docling's OCR
+   recovers some labels but mixed with garbage (`ndut`, `Inpdut`, `二`, `N×4p`). For the
+   cloud course, where diagrams *are* the content, this is the biggest gap.
+
+**Decision: route pages, don't pick one parser.** Running docling-formulas on every page
+costs ~400× the baseline, for no gain on text and tables. The baseline's own page flags
+(vector drawings, large images) mark exactly the pages where it fails: 13 of 60 in the
+NLP PDF. So: baseline everywhere, and a heavier extractor only on flagged pages.
+
+**Which heavier extractor isn't decided yet.** docling-formulas handles formulas but not
+diagrams. Next experiment: render flagged pages and slide pictures to images and have
+Claude read them, scored on the same labels. It may handle both formulas and diagrams,
+and it can describe a diagram's *structure* (e.g. blue/green deployment), not just its
+labels. It costs money per page, which the benchmark will measure.
+
+**Caveats:** 13 pages, 37 facts, two files from two courses. The numbers show direction,
+not precise rates. More files are needed, especially a scan, a math-heavy ML deck, and
+a deck with real speaker notes.
+
+---
+
 ## 2026-10-22: docling as a second ingestion engine
 
 **Done:** `ingest(..., engine=...)` and `alfred ingest --engine` select `baseline` (default),
