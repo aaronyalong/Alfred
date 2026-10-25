@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
         type=Engine,
         choices=list(Engine),
         action="append",
-        help="engine to run (repeatable; default: every installed engine)",
+        help="engine to run (repeatable; default: all installed engines except paid vision)",
     )
     bench.add_argument("--data", type=Path, default=Path("data/private"))
     bench.add_argument("--labels", type=Path, default=Path("evals/ingestion/labels.toml"))
@@ -57,7 +57,9 @@ def _ingest(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
 
 def _eval_ingestion(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     engines = args.engine or [
-        e for e in Engine if e is Engine.BASELINE or docling_parser.is_installed()
+        e
+        for e in Engine
+        if e is Engine.BASELINE or (e is not Engine.VISION and docling_parser.is_installed())
     ]
     try:
         report = ingestion_eval.run(ingestion_eval.load_labels(args.labels), args.data, engines)

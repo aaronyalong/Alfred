@@ -17,6 +17,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from alfred.ingest import Document, Engine, IngestError, docling_parser, ingest
+from alfred.ingest.vision import VisionReader
 
 Kind = Literal["text", "table", "formula", "diagram"]
 
@@ -118,6 +119,8 @@ class EngineResult(_Strict):
     pages_parsed: int
     pages: list[PageResult]
     errors: list[str]
+    api_calls: int = 0  # vision model calls; each one costs money
+    cost_usd: float | None = None  # None when unknown, e.g. a fallback model without a price
 
     def recall(self, kind: Kind | None = None) -> tuple[int, int]:
         """(facts found, facts labeled), optionally for one kind of page."""
@@ -155,7 +158,8 @@ def locate_files(labels: Labels, data_dir: Path) -> dict[str, Path]:
 
 
 def run_engine(engine: Engine, labels: Labels, files: dict[str, Path]) -> EngineResult:
-    if engine is not Engine.BASELINE:
+    vision = VisionReader() if engine is Engine.VISION else None
+    if engine in (Engine.DOCLING, Engine.DOCLING_FORMULAS):
         docling_parser.warm_up(formulas=engine is Engine.DOCLING_FORMULAS)
 
     documents: dict[str, Document] = {}
@@ -163,7 +167,7 @@ def run_engine(engine: Engine, labels: Labels, files: dict[str, Path]) -> Engine
     started = time.perf_counter()
     for name, path in files.items():
         try:
-            documents[name] = ingest(path, engine=engine)
+            documents[name] = ingest(path, engine=engine, vision=vision)
         except IngestError as e:
             errors.append(f"{name}: {e}")
     seconds = time.perf_counter() - started
@@ -184,6 +188,8 @@ def run_engine(engine: Engine, labels: Labels, files: dict[str, Path]) -> Engine
         pages_parsed=sum(len(d.pages) for d in documents.values()),
         pages=pages,
         errors=errors,
+        api_calls=vision.usage.calls if vision else 0,
+        cost_usd=round(vision.usage.cost_usd, 4) if vision and vision.usage.cost_usd else None,
     )
 
 
@@ -224,6 +230,13 @@ def render(report: Report) -> str:
         cells = "".join(f"{ratio(sum(r.found), len(r.found)):>18}" for r in results)
         lines.append(f"{file[:36] + ' p.' + str(number):<44}{results[0].kind:<9}{cells}")
 
+    for result in report.engines:
+        if result.api_calls:
+            cost = f"${result.cost_usd:.2f}" if result.cost_usd is not None else "unknown cost"
+            each = (
+                f", ${result.cost_usd / result.api_calls:.3f} per call" if result.cost_usd else ""
+            )
+            lines += ["", f"{result.engine}: {result.api_calls} API calls, {cost}{each}"]
     for result in report.engines:
         lines += [f"error ({result.engine}): {error}" for error in result.errors]
     return "\n".join(lines)

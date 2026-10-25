@@ -1,6 +1,7 @@
 import hashlib
 import json
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -9,10 +10,13 @@ from pydantic import ValidationError
 from alfred.cli import main
 from alfred.evals.ingestion import (
     BenchmarkError,
+    EngineResult,
     LabeledPage,
     Labels,
+    Report,
     load_labels,
     normalize,
+    render,
     run,
 )
 from alfred.ingest import Engine
@@ -106,3 +110,21 @@ def test_cli_prints_table_and_writes_json(
     assert code == 0
     assert "1/2 50%" in capsys.readouterr().out
     assert json.loads(out.read_text())["engines"][0]["engine"] == "baseline"
+
+
+def test_render_reports_api_calls_and_cost_for_paid_engines() -> None:
+    def result(engine: Engine, api_calls: int, cost_usd: float | None) -> EngineResult:
+        return EngineResult(
+            engine=engine, parsers=[], seconds=1.0, pages_parsed=10, pages=[], errors=[],
+            api_calls=api_calls, cost_usd=cost_usd,
+        )  # fmt: skip
+
+    report = Report(
+        run_at=datetime(2026, 10, 24, tzinfo=UTC),
+        engines=[result(Engine.BASELINE, 0, None), result(Engine.VISION, 4, 0.10)],
+    )
+
+    text = render(report)
+
+    assert "vision: 4 API calls, $0.10, $0.025 per call" in text
+    assert "baseline:" not in text

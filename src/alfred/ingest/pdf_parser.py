@@ -6,11 +6,13 @@ It is the baseline that richer parsers have to beat in the ingestion benchmark.
 Pages whose content is images or vector drawings are flagged, so the gap is visible.
 """
 
+from collections.abc import Iterable
 from importlib.metadata import version
 from pathlib import Path
 
 import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_c
+from PIL import Image
 
 from alfred.ingest.errors import IngestError, TooManyPagesError
 from alfred.ingest.issues import MIN_VISUAL_SHARE, NO_TEXT_ISSUE, visual_issue
@@ -59,6 +61,23 @@ def _parse_page(page: pdfium.PdfPage, *, number: int) -> Page:
         issues.append(VECTOR_ISSUE)
     blocks = (Block(kind=BlockKind.TEXT, text=text),) if text else ()
     return Page(number=number, blocks=blocks, issues=tuple(issues))
+
+
+def render_pages(path: Path, numbers: Iterable[int], *, max_side: int) -> dict[int, Image.Image]:
+    """Render pages as images whose longer side is max_side pixels, e.g. for a vision model."""
+    pdf = pdfium.PdfDocument(path)
+    try:
+        images: dict[int, Image.Image] = {}
+        for number in numbers:
+            page = pdf[number - 1]
+            try:
+                width, height = page.get_size()  # in points
+                images[number] = page.render(scale=max_side / max(width, height)).to_pil()
+            finally:
+                page.close()
+        return images
+    finally:
+        pdf.close()
 
 
 def _count_visuals(page: pdfium.PdfPage) -> tuple[int, int]:

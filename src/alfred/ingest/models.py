@@ -29,6 +29,7 @@ class BlockKind(StrEnum):
     TEXT = "text"
     TABLE = "table"
     FORMULA = "formula"  # LaTeX, when an engine can transcribe formulas
+    DIAGRAM = "diagram"  # what a figure shows and its labels, written by a vision model
     NOTES = "notes"  # PPTX speaker notes
 
 

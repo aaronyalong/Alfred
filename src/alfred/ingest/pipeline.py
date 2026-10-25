@@ -11,6 +11,7 @@ from alfred.ingest import docling_parser, docx_parser, pdf_parser, pptx_parser
 from alfred.ingest.detect import detect_format
 from alfred.ingest.errors import FileTooLargeError
 from alfred.ingest.models import Document, Page, SourceFormat, Unit
+from alfred.ingest.vision import VisionReader
 
 MB = 1024 * 1024
 
@@ -31,6 +32,7 @@ class Engine(StrEnum):
     BASELINE = "baseline"
     DOCLING = "docling"
     DOCLING_FORMULAS = "docling-formulas"  # also transcribes formulas to LaTeX (slower)
+    VISION = "vision"  # baseline, plus Claude reading the flagged pages (costs money per page)
 
 
 @dataclass(frozen=True)
@@ -52,7 +54,13 @@ _UNITS = {
 }
 
 
-def ingest(path: Path, limits: Limits | None = None, engine: Engine = Engine.BASELINE) -> Document:
+def ingest(
+    path: Path,
+    limits: Limits | None = None,
+    engine: Engine = Engine.BASELINE,
+    vision: VisionReader | None = None,
+) -> Document:
+    """Parse a file. `vision` configures the vision engine and collects its usage."""
     limits = limits or Limits()
 
     # Cheap checks first, before any parser touches the file.
@@ -65,9 +73,14 @@ def ingest(path: Path, limits: Limits | None = None, engine: Engine = Engine.BAS
     if source_format in (SourceFormat.PPTX, SourceFormat.DOCX):
         _check_unpacked_size(path, limits.max_unpacked_bytes)
 
-    if engine is Engine.BASELINE:
+    unit = _UNITS[source_format]
+    if engine in (Engine.BASELINE, Engine.VISION):
         parser = _BASELINE_PARSERS[source_format]
         name, pages = parser.name, parser.parse(path, limits.max_pages)
+        if engine is Engine.VISION:
+            vision = vision or VisionReader()
+            name += f"+{vision.name}"
+            pages = vision.read_flagged(path, source_format, unit, pages)
     else:
         formulas = engine is Engine.DOCLING_FORMULAS
         name = docling_parser.parser_name(formulas=formulas)
@@ -79,7 +92,7 @@ def ingest(path: Path, limits: Limits | None = None, engine: Engine = Engine.BAS
         source_name=path.name,
         source_sha256=_sha256(path),
         format=source_format,
-        unit=_UNITS[source_format],
+        unit=unit,
         parser=name,
         pages=pages,
     )

@@ -5,7 +5,8 @@ nested, and what the speaker notes say. Not extracted yet: equations, charts, Sm
 text inside images. Slides that contain them are flagged, so the gap is visible, not silent.
 """
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator
+from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path
 
@@ -66,6 +67,36 @@ def _parse_slide(slide: Slide, *, number: int, slide_area: int) -> Page:
         issues.append(equation_issue(equations))
 
     return Page(number=number, blocks=tuple(blocks), issues=tuple(issues))
+
+
+@dataclass(frozen=True)
+class SlideVisuals:
+    """The large visuals on one slide, the same ones counted in its visual issue."""
+
+    pictures: tuple[bytes, ...]  # embedded image files, as stored in the deck
+    others: int  # charts, SmartArt, media and linked pictures: no image file to hand over
+
+
+def large_visuals(path: Path, numbers: Collection[int]) -> dict[int, SlideVisuals]:
+    presentation = Presentation(str(path))
+    slide_area = (presentation.slide_width or 0) * (presentation.slide_height or 0)
+    result: dict[int, SlideVisuals] = {}
+    for number, slide in enumerate(presentation.slides, start=1):
+        if number not in numbers:
+            continue
+        visuals = [s for s in _flatten(slide.shapes) if _is_large_visual(s, slide_area)]
+        pictures = tuple(blob for s in visuals if (blob := _embedded_image(s)))
+        result[number] = SlideVisuals(pictures=pictures, others=len(visuals) - len(pictures))
+    return result
+
+
+def _embedded_image(shape: BaseShape) -> bytes | None:
+    if not isinstance(shape, Picture):
+        return None
+    try:
+        return shape.image.blob
+    except ValueError:  # a linked picture: the image file isn't inside the deck
+        return None
 
 
 def _flatten(shapes: Iterable[BaseShape]) -> Iterator[BaseShape]:
