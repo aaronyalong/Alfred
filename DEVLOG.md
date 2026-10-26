@@ -4,6 +4,51 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-10-25: Vision engine: Claude reads the flagged pages
+
+**Setup:** the new `vision` engine runs the baseline everywhere and sends only the pages it
+flagged to Claude (Opus 5.5, effort `medium`): a PDF page rendered as an image, or a slide's
+large pictures, plus the text already extracted. Claude returns only what's missing, as
+structured blocks: formulas in LaTeX, diagrams as a description followed by their labels.
+Same 37 facts and scorer as before. The prompt was written without looking at the facts.
+
+| engine | all facts | text | table | formula | diagram | time (79 pages) | cost |
+|---|---|---|---|---|---|---|---|
+| baseline | 10/37 (27%) | 5/5 | 3/3 | 1/13 | 1/16 | **0.2 s** | 0 |
+| docling-formulas | 21/37 (57%) | 5/5 | 3/3 | 10/13 | 3/16 | 143 s | 0 |
+| vision | **37/37 (100%)** | 5/5 | 3/3 | **13/13** | **16/16** | 42 s | $0.47 |
+
+29 pages were flagged (13 PDF pages, 16 slides), so 29 calls: **1.6¢ per flagged page**,
+about 0.6¢ per page over both files. Four calls run in parallel, so the time is wall-clock,
+not compute. All 29 were answered by Opus 5.5 (no refusals, no fallbacks).
+
+**100% made me suspicious, so I checked by eye.** The scorer only checks that a fact is
+present; it can't see a wrong formula next to it. A second run, saved outside the repo,
+also scored 37/37. On that run I compared the output against the page images:
+
+- **Formulas were exact**, including the attention-mask slide where docling had produced
+  `\max` instead of `\text{mask}`.
+- **Diagrams were described by structure, not just labels.** The blue/green deployment
+  slide came back as "Service CNAME routes the live deployment to Blue, the pending one to
+  Green; Chef provisions both AMIs". The vector-angle exercise had angles within a few
+  degrees. The LSTM diagram's gates were described correctly.
+- **One completion beyond what's printed:** a label cut off as "SSH Basi" in the image came
+  back as "SSH Bastion". It's right, but it isn't verbatim.
+- **Jokes are transcribed as content.** Page 2's comic and "Final Exams" Venn diagram came
+  back as diagram blocks. Question generation will have to ignore decoration.
+
+**Decision: vision is the extractor for flagged pages.** It beats docling-formulas on every
+kind of page, at 1/3 of the time, for about half a cent per page. docling stays an optional
+extra for now, but nothing depends on it.
+
+**What this doesn't show:** the benchmark is now saturated, so it can't tell vision
+configurations apart (a cheaper model, lower effort). It needs harder pages: a scan, a
+math-heavy deck, and a review of the labels themselves. Each run costs money and re-reads
+every file, so results should be cached by file hash before this is used outside the
+benchmark.
+
+---
+
 ## 2026-10-22: Ingestion benchmark: first results
 
 **Setup:** `alfred eval ingestion` scores each engine on the 37 hand-written facts
