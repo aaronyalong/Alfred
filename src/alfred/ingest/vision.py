@@ -12,7 +12,9 @@ routed yet: their images aren't flagged per section with enough detail to send.
 """
 
 import base64
+import hashlib
 import io
+import json
 import threading
 from collections.abc import Collection
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +26,7 @@ import anthropic
 from anthropic.types.beta import (
     BetaContentBlockParam,
     BetaImageBlockParam,
+    BetaJSONOutputFormatParam,
     BetaMessage,
     BetaOutputConfigParam,
 )
@@ -91,16 +94,24 @@ class _Reading(BaseModel):
     blocks: list[_ReadBlock]
 
 
+_FORMAT: BetaJSONOutputFormatParam = {"type": "json_schema", "schema": _Reading.model_json_schema()}
+
+
 @dataclass
 class VisionUsage:
     """Running totals over every call one reader made. Safe to update from threads."""
 
     calls: int = 0
+    cached: int = 0  # pages answered from the cache, at no cost
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: float | None = 0.0  # None once any call ran on a model with no known price
     served_by: set[str] = field(default_factory=set)  # differs from the request on a fallback
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def add_cached(self) -> None:
+        with self._lock:
+            self.cached += 1
 
     def add(self, model: str, input_tokens: int, output_tokens: int) -> None:
         price = _PRICES.get(model)
@@ -130,6 +141,7 @@ class VisionReader:
         model: str | None = None,
         effort: Effort = "medium",
         max_workers: int = 4,
+        cache: "VisionCache | None" = None,
     ) -> None:
         settings = get_settings()
         self.model = model or settings.alfred_model
@@ -137,6 +149,7 @@ class VisionReader:
         self.usage = VisionUsage()
         self._max_workers = max_workers
         self._client = client
+        self._cache = cache
         self._key = settings.anthropic_api_key
 
     @property
@@ -157,19 +170,27 @@ class VisionReader:
         return tuple(read.get(p.number, p) for p in pages)
 
     def _read(self, request: _Request, unit: Unit) -> Page:
-        response = self._call(request, unit)
-        self.usage.add(response.model, response.usage.input_tokens, response.usage.output_tokens)
-
         page = request.page
-        if response.stop_reason == "refusal":
-            return page.model_copy(update={"issues": (*page.issues, DECLINED_ISSUE)})
-        # Validated here, not by the SDK's parse(): it raises on a reply cut off at max_tokens
-        # before the stop reason and the usage can be read.
-        text = next((b.text for b in response.content if b.type == "text"), "")
-        try:
-            reading = _Reading.model_validate_json(text)
-        except ValidationError:
-            return page.model_copy(update={"issues": (*page.issues, FAILED_ISSUE)})
+        content = _content(request, unit)
+        key = _cache_key(self.model, self.effort, content)
+        reading = self._cache.get(key) if self._cache else None
+        if reading is not None:
+            self.usage.add_cached()
+        else:
+            response = self._call(content, unit, page.number)
+            usage = response.usage
+            self.usage.add(response.model, usage.input_tokens, usage.output_tokens)
+            if response.stop_reason == "refusal":
+                return page.model_copy(update={"issues": (*page.issues, DECLINED_ISSUE)})
+            # Validated here, not by the SDK's parse(): it raises on a reply cut off at
+            # max_tokens before the stop reason and the usage can be read.
+            text = next((b.text for b in response.content if b.type == "text"), "")
+            try:
+                reading = _Reading.model_validate_json(text)
+            except ValidationError:
+                return page.model_copy(update={"issues": (*page.issues, FAILED_ISSUE)})
+            if self._cache:  # only good readings: refusals and failures are retried next time
+                self._cache.put(key, reading)
 
         added = [
             Block(kind=BlockKind(b.kind), text=text)
@@ -183,29 +204,8 @@ class VisionReader:
             }
         )
 
-    def _call(self, request: _Request, unit: Unit) -> BetaMessage:
-        content: list[BetaContentBlockParam] = [
-            BetaImageBlockParam(
-                type="image",
-                source={
-                    "type": "base64",
-                    "media_type": "image/png",
-                    "data": base64.standard_b64encode(png).decode("ascii"),
-                },
-            )
-            for png in request.images
-        ]
-        shown = f"this {unit}" if unit is Unit.PAGE else f"the pictures on this {unit}"
-        prompt = (
-            f"<extracted_text>\n{request.page.text or '(none)'}\n</extracted_text>\n\n"
-            f"The images show {shown} ({unit} {request.page.number}). "
-            "Return what the extracted text is missing."
-        )
-        content.append({"type": "text", "text": prompt})
-        output_config: BetaOutputConfigParam = {
-            "effort": self.effort,
-            "format": {"type": "json_schema", "schema": _Reading.model_json_schema()},
-        }
+    def _call(self, content: list[BetaContentBlockParam], unit: Unit, number: int) -> BetaMessage:
+        output_config: BetaOutputConfigParam = {"effort": self.effort, "format": _FORMAT}
         try:
             return self._get_client().beta.messages.create(
                 model=self.model,
@@ -220,9 +220,7 @@ class VisionReader:
         except anthropic.AuthenticationError as e:
             raise IngestError(f"the vision engine needs ANTHROPIC_API_KEY (in .env): {e}") from e
         except anthropic.APIError as e:
-            raise IngestError(
-                f"vision model call failed on {unit} {request.page.number}: {e}"
-            ) from e
+            raise IngestError(f"vision model call failed on {unit} {number}: {e}") from e
 
     def _get_client(self) -> anthropic.Anthropic:
         if self._client is None:
@@ -234,6 +232,61 @@ class VisionReader:
                     f"the vision engine needs ANTHROPIC_API_KEY (in .env): {e}"
                 ) from e
         return self._client
+
+
+class VisionCache:
+    """Readings saved on disk, keyed by the exact request, so each page is paid for once.
+
+    The files contain text from the course material, so the folder must stay git-ignored.
+    """
+
+    def __init__(self, directory: Path) -> None:
+        self._directory = directory
+
+    def get(self, key: str) -> "_Reading | None":
+        try:
+            return _Reading.model_validate_json(self._path(key).read_bytes())
+        except (OSError, ValidationError):  # missing, or written by an older schema
+            return None
+
+    def put(self, key: str, reading: "_Reading") -> None:
+        self._directory.mkdir(parents=True, exist_ok=True)
+        # Write, then rename: a reader on another thread never sees a half-written file.
+        temporary = self._path(key).with_suffix(f".{threading.get_ident()}.tmp")
+        temporary.write_text(reading.model_dump_json(), encoding="utf-8")
+        temporary.replace(self._path(key))
+
+    def _path(self, key: str) -> Path:
+        return self._directory / f"{key}.json"
+
+
+def _content(request: _Request, unit: Unit) -> list[BetaContentBlockParam]:
+    content: list[BetaContentBlockParam] = [
+        BetaImageBlockParam(
+            type="image",
+            source={
+                "type": "base64",
+                "media_type": "image/png",
+                "data": base64.standard_b64encode(png).decode("ascii"),
+            },
+        )
+        for png in request.images
+    ]
+    shown = f"this {unit}" if unit is Unit.PAGE else f"the pictures on this {unit}"
+    prompt = (
+        f"<extracted_text>\n{request.page.text or '(none)'}\n</extracted_text>\n\n"
+        f"The images show {shown} ({unit} {request.page.number}). "
+        "Return what the extracted text is missing."
+    )
+    content.append({"type": "text", "text": prompt})
+    return content
+
+
+def _cache_key(model: str, effort: Effort, content: list[BetaContentBlockParam]) -> str:
+    """Hash everything that shapes the answer: a new prompt or model never reuses old readings."""
+    request = {"model": model, "effort": effort, "system": _SYSTEM, "format": _FORMAT}
+    payload = json.dumps({**request, "content": content}, sort_keys=True)
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def _build_requests(path: Path, source_format: SourceFormat, pages: list[Page]) -> list[_Request]:

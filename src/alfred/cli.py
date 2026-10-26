@@ -4,8 +4,10 @@ import argparse
 import sys
 from pathlib import Path
 
+from alfred.config import get_settings
 from alfred.evals import ingestion as ingestion_eval
 from alfred.ingest import Document, Engine, IngestError, docling_parser, ingest
+from alfred.ingest.vision import VisionCache, VisionReader
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -34,6 +36,9 @@ def main(argv: list[str] | None = None) -> int:
     bench.add_argument("--data", type=Path, default=Path("data/private"))
     bench.add_argument("--labels", type=Path, default=Path("evals/ingestion/labels.toml"))
     bench.add_argument("--out", type=Path, help="also write the full report as JSON")
+    bench.add_argument(
+        "--no-cache", action="store_true", help="call the vision model even for pages read before"
+    )
     bench.set_defaults(handler=_eval_ingestion)
 
     args = parser.parse_args(argv)
@@ -44,7 +49,8 @@ def _ingest(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if not args.file.is_file():
         parser.error(f"no such file: {args.file}")
     try:
-        document = ingest(args.file, engine=args.engine)
+        vision = VisionReader(cache=_cache()) if args.engine is Engine.VISION else None
+        document = ingest(args.file, engine=args.engine, vision=vision)
         if args.page is not None:
             document.page(args.page)  # fail early on a page number that doesn't exist
     except (IngestError, KeyError) as e:
@@ -62,7 +68,9 @@ def _eval_ingestion(parser: argparse.ArgumentParser, args: argparse.Namespace) -
         if e is Engine.BASELINE or (e is not Engine.VISION and docling_parser.is_installed())
     ]
     try:
-        report = ingestion_eval.run(ingestion_eval.load_labels(args.labels), args.data, engines)
+        labels = ingestion_eval.load_labels(args.labels)
+        cache = None if args.no_cache else _cache()
+        report = ingestion_eval.run(labels, args.data, engines, cache)
     except ingestion_eval.BenchmarkError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -71,6 +79,10 @@ def _eval_ingestion(parser: argparse.ArgumentParser, args: argparse.Namespace) -
     if args.out:
         args.out.write_text(report.model_dump_json(indent=2) + "\n", encoding="utf-8")
     return 0
+
+
+def _cache() -> VisionCache:
+    return VisionCache(get_settings().alfred_cache_dir)
 
 
 def render(document: Document, page: int | None = None) -> str:

@@ -20,6 +20,7 @@ from alfred.ingest.vision import (
     FAILED_ISSUE,
     MAX_IMAGE_SIDE,
     VISION_ISSUE,
+    VisionCache,
     VisionReader,
     VisionUsage,
 )
@@ -50,11 +51,12 @@ def fake_reader(
     reply: str | None = None,
     stop_reason: str = "end_turn",
     model: str = "claude-opus-5-5",
+    cache: VisionCache | None = None,
 ) -> tuple[VisionReader, FakeMessages]:
     reply = json.dumps({"blocks": blocks or []}) if reply is None else reply
     messages = FakeMessages(reply, stop_reason, model)
     client = SimpleNamespace(beta=SimpleNamespace(messages=messages))
-    return VisionReader(cast(anthropic.Anthropic, client), model=model), messages
+    return VisionReader(cast(anthropic.Anthropic, client), model=model, cache=cache), messages
 
 
 def sent_images(request: dict[str, Any]) -> list[Image.Image]:
@@ -178,3 +180,55 @@ def test_cost_is_unknown_once_a_call_ran_on_an_unpriced_model() -> None:
 
     assert usage.cost_usd is None
     assert usage.calls == 2
+
+
+FORMULA = [{"kind": "formula", "text": r"\sqrt{d_k}"}]
+
+
+def test_a_cached_reading_is_reused_without_a_call(tmp_path: Path) -> None:
+    pdf, cache = pdf_with_image_on_page_2(tmp_path), VisionCache(tmp_path / "cache")
+    first, _ = fake_reader(FORMULA, cache=cache)
+    second, messages = fake_reader(cache=cache)  # would return no blocks if it were called
+
+    expected = ingest(pdf, engine=Engine.VISION, vision=first)
+    document = ingest(pdf, engine=Engine.VISION, vision=second)
+
+    assert messages.requests == []
+    assert (second.usage.calls, second.usage.cached, second.usage.cost_usd) == (0, 1, 0.0)
+    assert document.pages == expected.pages
+
+
+def test_failed_readings_are_not_cached(tmp_path: Path) -> None:
+    pdf, cache = pdf_with_image_on_page_2(tmp_path), VisionCache(tmp_path / "cache")
+    declined, _ = fake_reader(reply="No.", stop_reason="refusal", cache=cache)
+    retry, messages = fake_reader(FORMULA, cache=cache)
+
+    ingest(pdf, engine=Engine.VISION, vision=declined)
+    page = ingest(pdf, engine=Engine.VISION, vision=retry).page(2)
+
+    assert len(messages.requests) == 1
+    assert page.issues == (VISION_ISSUE,)
+
+
+def test_a_different_model_does_not_reuse_cached_readings(tmp_path: Path) -> None:
+    pdf, cache = pdf_with_image_on_page_2(tmp_path), VisionCache(tmp_path / "cache")
+    opus, _ = fake_reader(FORMULA, cache=cache)
+    sonnet, messages = fake_reader(FORMULA, model="claude-sonnet-5-5", cache=cache)
+
+    ingest(pdf, engine=Engine.VISION, vision=opus)
+    ingest(pdf, engine=Engine.VISION, vision=sonnet)
+
+    assert len(messages.requests) == 1
+
+
+def test_an_unreadable_cache_file_counts_as_a_miss(tmp_path: Path) -> None:
+    pdf, cache_dir = pdf_with_image_on_page_2(tmp_path), tmp_path / "cache"
+    first, _ = fake_reader(FORMULA, cache=VisionCache(cache_dir))
+    ingest(pdf, engine=Engine.VISION, vision=first)
+    for saved in cache_dir.iterdir():
+        saved.write_text("{not json", encoding="utf-8")
+    second, messages = fake_reader(FORMULA, cache=VisionCache(cache_dir))
+
+    ingest(pdf, engine=Engine.VISION, vision=second)
+
+    assert len(messages.requests) == 1

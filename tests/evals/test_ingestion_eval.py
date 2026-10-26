@@ -113,18 +113,20 @@ def test_cli_prints_table_and_writes_json(
 
 
 def test_render_reports_api_calls_and_cost_for_paid_engines() -> None:
-    def result(engine: Engine, api_calls: int, cost_usd: float | None) -> EngineResult:
+    def result(
+        engine: Engine, api_calls: int, cost_usd: float | None, cached: int = 0
+    ) -> EngineResult:
         return EngineResult(
             engine=engine, parsers=[], seconds=1.0, pages_parsed=10, pages=[], errors=[],
-            api_calls=api_calls, cost_usd=cost_usd,
+            api_calls=api_calls, cost_usd=cost_usd, cached_pages=cached,
         )  # fmt: skip
 
-    report = Report(
-        run_at=datetime(2026, 10, 24, tzinfo=UTC),
-        engines=[result(Engine.BASELINE, 0, None), result(Engine.VISION, 4, 0.10)],
-    )
+    def text(*results: EngineResult) -> str:
+        return render(Report(run_at=datetime(2026, 10, 24, tzinfo=UTC), engines=list(results)))
 
-    text = render(report)
+    paid = text(result(Engine.BASELINE, 0, None), result(Engine.VISION, 4, 0.10, cached=2))
+    free = text(result(Engine.VISION, 0, None, cached=6))
 
-    assert "vision: 4 API calls, $0.10, $0.025 per call" in text
-    assert "baseline:" not in text
+    assert "vision: 4 API calls, $0.10, $0.025 per call (2 pages from cache)" in paid
+    assert "baseline:" not in paid
+    assert "vision: 0 API calls, $0.00 (6 pages from cache)" in free
