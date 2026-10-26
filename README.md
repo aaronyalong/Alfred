@@ -5,9 +5,6 @@ practice material: multiple-choice and true/false quizzes, short-answer question
 full practice tests. Every question comes with an answer key, an explanation, a difficulty level
 and the exact page and quote it was generated from.
 
-> **Status:** early development. The design is settled and the ingestion pipeline is being built.
-> See [DEVLOG.md](DEVLOG.md) for decisions and measured results.
-
 ## How it works
 
 ```
@@ -28,16 +25,6 @@ upload ─▶ ingest ─▶ topic map ─▶ generate ─▶ check ─▶ verify
    and that options are well-formed.
 5. **Verify:** a second model call answers each question from the cited page alone; questions
    whose answer key it cannot confirm are regenerated.
-
-## Design principles
-
-- **Measure, don't assume.** Ingestion quality, question quality and cost are measured against a
-  hand-labeled evaluation set, and negative results are reported in the DEVLOG.
-- **Plain pipeline first.** LLM workflows are added only where an evaluation shows they pay for
-  their cost.
-- **Untrusted input.** Uploaded documents are treated as untrusted: they may be malformed or
-  contain prompt-injection attempts.
-- **Privacy.** Original uploads are deleted after processing, and users can delete their data.
 
 ## Tech stack
 
