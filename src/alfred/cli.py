@@ -4,10 +4,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from alfred.config import get_settings
 from alfred.evals import ingestion as ingestion_eval
 from alfred.ingest import Document, Engine, IngestError, docling_parser, ingest
-from alfred.ingest.vision import VisionCache, VisionReader
+from alfred.ingest.vision import VisionReader
+from alfred.llm import Usage, default_cache
+from alfred.questions import MultipleChoice, QuestionSet
+from alfred.questions.generate import GenerationError, Generator
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -22,6 +24,19 @@ def main(argv: list[str] | None = None) -> int:
         "--engine", type=Engine, choices=list(Engine), default=Engine.BASELINE, help="parser to use"
     )
     ingest_cmd.set_defaults(handler=_ingest)
+
+    generate_cmd = commands.add_parser("generate", help="write practice questions from a file")
+    generate_cmd.add_argument("file", type=Path)
+    generate_cmd.add_argument("--count", type=int, default=10, help="questions to ask for")
+    generate_cmd.add_argument(
+        "--engine",
+        type=Engine,
+        choices=list(Engine),
+        default=Engine.VISION,
+        help="parser to use (default: vision, so diagrams and formulas are included)",
+    )
+    generate_cmd.add_argument("--out", type=Path, help="also write the question set as JSON")
+    generate_cmd.set_defaults(handler=_generate)
 
     eval_cmd = commands.add_parser("eval", help="run an evaluation")
     evals = eval_cmd.add_subparsers(dest="evaluation", required=True)
@@ -49,7 +64,9 @@ def _ingest(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if not args.file.is_file():
         parser.error(f"no such file: {args.file}")
     try:
-        vision = VisionReader(cache=_cache()) if args.engine is Engine.VISION else None
+        vision = (
+            VisionReader(cache=default_cache("vision")) if args.engine is Engine.VISION else None
+        )
         document = ingest(args.file, engine=args.engine, vision=vision)
         if args.page is not None:
             document.page(args.page)  # fail early on a page number that doesn't exist
@@ -61,6 +78,30 @@ def _ingest(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     return 0
 
 
+def _generate(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    if not args.file.is_file():
+        parser.error(f"no such file: {args.file}")
+    if args.count < 1:
+        parser.error("--count must be at least 1")
+    vision = VisionReader(cache=default_cache("vision")) if args.engine is Engine.VISION else None
+    generator = Generator(topic_cache=default_cache("topics"))
+    try:
+        document = ingest(args.file, engine=args.engine, vision=vision)
+        questions = generator.generate(document, count=args.count)
+    except (IngestError, GenerationError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    finally:
+        usage = [("vision", vision.usage)] if vision else []
+        print(render_usage([*usage, ("generation", generator.usage)]), file=sys.stderr)
+
+    print(render_questions(questions))
+    if args.out:
+        # The question set quotes the course material: keep it out of git (e.g. data/private).
+        args.out.write_text(questions.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    return 0
+
+
 def _eval_ingestion(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     engines = args.engine or [
         e
@@ -69,7 +110,7 @@ def _eval_ingestion(parser: argparse.ArgumentParser, args: argparse.Namespace) -
     ]
     try:
         labels = ingestion_eval.load_labels(args.labels)
-        cache = None if args.no_cache else _cache()
+        cache = None if args.no_cache else default_cache("vision")
         report = ingestion_eval.run(labels, args.data, engines, cache)
     except ingestion_eval.BenchmarkError as e:
         print(f"error: {e}", file=sys.stderr)
@@ -79,10 +120,6 @@ def _eval_ingestion(parser: argparse.ArgumentParser, args: argparse.Namespace) -
     if args.out:
         args.out.write_text(report.model_dump_json(indent=2) + "\n", encoding="utf-8")
     return 0
-
-
-def _cache() -> VisionCache:
-    return VisionCache(get_settings().alfred_cache_dir)
 
 
 def render(document: Document, page: int | None = None) -> str:
@@ -100,6 +137,47 @@ def render(document: Document, page: int | None = None) -> str:
         lines += ["", f"── {document.unit} {p.number} ──"]
         lines += [f"[{block.kind}] {block.text}" for block in p.blocks] or ["(no text)"]
     return "\n".join(lines)
+
+
+def render_questions(questions: QuestionSet) -> str:
+    """Human-readable view: each question with its answer, explanation and source."""
+    unit = questions.unit
+    lines = [
+        f"{questions.source_name} · {len(questions.questions)} questions · "
+        f"{len(questions.rejected)} rejected · {questions.model}",
+        "topics: " + ", ".join(t.id for t in questions.topics.topics),
+    ]
+    for n, q in enumerate(questions.questions, start=1):
+        kind = "multiple choice" if isinstance(q, MultipleChoice) else "true/false"
+        lines += ["", f"{n}. [{kind} · {q.bloom} · {', '.join(q.topic_ids)}]", f"   {q.question}"]
+        if isinstance(q, MultipleChoice):
+            for i, option in enumerate(q.options):
+                mark = "*" if i == q.answer else " "
+                lines.append(f"  {mark} {'abcdefgh'[i]}) {option}")
+        else:
+            lines.append(f"   answer: {'true' if q.answer else 'false'}")
+        lines += [
+            f"   why: {q.explanation}",
+            f'   source: {unit} {q.source.page}, "{q.source.quote}"',
+        ]
+    if questions.rejected:
+        lines += ["", "rejected:"]
+        lines += [
+            f"  - {r.question.question} ({'; '.join(r.problems)})" for r in questions.rejected
+        ]
+    lines += [f"warning: {w}" for w in questions.warnings]
+    return "\n".join(lines)
+
+
+def render_usage(usages: list[tuple[str, Usage]]) -> str:
+    parts = []
+    for name, usage in usages:
+        if not (usage.calls or usage.cached):
+            continue
+        cost = "unknown cost" if usage.cost_usd is None else f"${usage.cost_usd:.2f}"
+        cached = f", {usage.cached} from cache" if usage.cached else ""
+        parts.append(f"{name}: {usage.calls} calls, {cost}{cached}")
+    return "cost: " + ("; ".join(parts) if parts else "no model calls")
 
 
 if __name__ == "__main__":

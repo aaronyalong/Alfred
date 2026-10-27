@@ -17,7 +17,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from alfred.ingest import Document, Engine, IngestError, docling_parser, ingest
-from alfred.ingest.vision import VisionCache, VisionReader
+from alfred.ingest.vision import VisionReader
+from alfred.llm import DiskCache
 
 Kind = Literal["text", "table", "formula", "diagram"]
 
@@ -159,7 +160,7 @@ def locate_files(labels: Labels, data_dir: Path) -> dict[str, Path]:
 
 
 def run_engine(
-    engine: Engine, labels: Labels, files: dict[str, Path], cache: VisionCache | None = None
+    engine: Engine, labels: Labels, files: dict[str, Path], cache: DiskCache | None = None
 ) -> EngineResult:
     vision = VisionReader(cache=cache) if engine is Engine.VISION else None
     if engine in (Engine.DOCLING, Engine.DOCLING_FORMULAS):
@@ -198,7 +199,7 @@ def run_engine(
 
 
 def run(
-    labels: Labels, data_dir: Path, engines: list[Engine], cache: VisionCache | None = None
+    labels: Labels, data_dir: Path, engines: list[Engine], cache: DiskCache | None = None
 ) -> Report:
     files = locate_files(labels, data_dir)
     return Report(

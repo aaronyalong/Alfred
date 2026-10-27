@@ -2,10 +2,8 @@ import base64
 import io
 import json
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
-import anthropic
 import pytest
 from fpdf import FPDF
 from PIL import Image
@@ -20,29 +18,12 @@ from alfred.ingest.vision import (
     FAILED_ISSUE,
     MAX_IMAGE_SIDE,
     VISION_ISSUE,
-    VisionCache,
     VisionReader,
-    VisionUsage,
 )
+from alfred.llm import DiskCache
+from tests.fake_claude import FakeClaude
 
 TEXT = "This page has enough text to count as a real page of content."
-
-
-class FakeMessages:
-    """Stands in for client.beta.messages: records each request, returns a canned reply."""
-
-    def __init__(self, reply: str, stop_reason: str, model: str) -> None:
-        self.requests: list[dict[str, Any]] = []
-        self._response = SimpleNamespace(
-            model=model,
-            stop_reason=stop_reason,
-            usage=SimpleNamespace(input_tokens=1_000, output_tokens=200),
-            content=[SimpleNamespace(type="text", text=reply)],
-        )
-
-    def create(self, **request: Any) -> SimpleNamespace:
-        self.requests.append(request)
-        return self._response
 
 
 def fake_reader(
@@ -51,12 +32,14 @@ def fake_reader(
     reply: str | None = None,
     stop_reason: str = "end_turn",
     model: str = "claude-opus-5-5",
-    cache: VisionCache | None = None,
-) -> tuple[VisionReader, FakeMessages]:
-    reply = json.dumps({"blocks": blocks or []}) if reply is None else reply
-    messages = FakeMessages(reply, stop_reason, model)
-    client = SimpleNamespace(beta=SimpleNamespace(messages=messages))
-    return VisionReader(cast(anthropic.Anthropic, client), model=model, cache=cache), messages
+    cache: DiskCache | None = None,
+) -> tuple[VisionReader, FakeClaude]:
+    fake = FakeClaude(
+        json.dumps({"blocks": blocks or []}) if reply is None else reply,
+        stop_reason=stop_reason,
+        model=model,
+    )
+    return VisionReader(fake.client, model=model, cache=cache), fake
 
 
 def sent_images(request: dict[str, Any]) -> list[Image.Image]:
@@ -172,21 +155,11 @@ def test_usage_adds_up_tokens_and_cost(tmp_path: Path) -> None:
     assert usage.served_by == {"claude-opus-5-5"}
 
 
-def test_cost_is_unknown_once_a_call_ran_on_an_unpriced_model() -> None:
-    usage = VisionUsage()
-
-    usage.add("claude-opus-5-5", 1_000, 200)
-    usage.add("some-fallback-model", 1_000, 200)
-
-    assert usage.cost_usd is None
-    assert usage.calls == 2
-
-
 FORMULA = [{"kind": "formula", "text": r"\sqrt{d_k}"}]
 
 
 def test_a_cached_reading_is_reused_without_a_call(tmp_path: Path) -> None:
-    pdf, cache = pdf_with_image_on_page_2(tmp_path), VisionCache(tmp_path / "cache")
+    pdf, cache = pdf_with_image_on_page_2(tmp_path), DiskCache(tmp_path / "cache")
     first, _ = fake_reader(FORMULA, cache=cache)
     second, messages = fake_reader(cache=cache)  # would return no blocks if it were called
 
@@ -199,7 +172,7 @@ def test_a_cached_reading_is_reused_without_a_call(tmp_path: Path) -> None:
 
 
 def test_failed_readings_are_not_cached(tmp_path: Path) -> None:
-    pdf, cache = pdf_with_image_on_page_2(tmp_path), VisionCache(tmp_path / "cache")
+    pdf, cache = pdf_with_image_on_page_2(tmp_path), DiskCache(tmp_path / "cache")
     declined, _ = fake_reader(reply="No.", stop_reason="refusal", cache=cache)
     retry, messages = fake_reader(FORMULA, cache=cache)
 
@@ -211,7 +184,7 @@ def test_failed_readings_are_not_cached(tmp_path: Path) -> None:
 
 
 def test_a_different_model_does_not_reuse_cached_readings(tmp_path: Path) -> None:
-    pdf, cache = pdf_with_image_on_page_2(tmp_path), VisionCache(tmp_path / "cache")
+    pdf, cache = pdf_with_image_on_page_2(tmp_path), DiskCache(tmp_path / "cache")
     opus, _ = fake_reader(FORMULA, cache=cache)
     sonnet, messages = fake_reader(FORMULA, model="claude-sonnet-5-5", cache=cache)
 
@@ -223,11 +196,11 @@ def test_a_different_model_does_not_reuse_cached_readings(tmp_path: Path) -> Non
 
 def test_an_unreadable_cache_file_counts_as_a_miss(tmp_path: Path) -> None:
     pdf, cache_dir = pdf_with_image_on_page_2(tmp_path), tmp_path / "cache"
-    first, _ = fake_reader(FORMULA, cache=VisionCache(cache_dir))
+    first, _ = fake_reader(FORMULA, cache=DiskCache(cache_dir))
     ingest(pdf, engine=Engine.VISION, vision=first)
     for saved in cache_dir.iterdir():
         saved.write_text("{not json", encoding="utf-8")
-    second, messages = fake_reader(FORMULA, cache=VisionCache(cache_dir))
+    second, messages = fake_reader(FORMULA, cache=DiskCache(cache_dir))
 
     ingest(pdf, engine=Engine.VISION, vision=second)
 

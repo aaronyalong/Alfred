@@ -4,6 +4,41 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-10-26: First question generation
+
+**Done:** `alfred generate <file>` maps a document's topics (one call, cached on disk per
+document), then writes questions in one streamed call with structured output. Every
+question cites a page and an exact quote. Plain code then checks the quote is on that page,
+that options are well-formed (4 distinct options, one correct, no "all/none of the above"),
+that topics come from the map, that there are no duplicates, and that true/false answers
+are balanced. Questions that fail are rejected with reasons, not repaired.
+
+**Decisions**
+
+- **The model's output schema is flat, not a union.** It returns two lists, multiple choice
+  and true/false, which keeps the schema simple for structured outputs. The stored format
+  is a tagged union.
+- **The answer is given as option text, then shuffled.** Models favor some answer positions,
+  so the options are reordered with a seed taken from the question: the same order on every
+  run, and the answer can't be guessed from its position. Answer text that matches no
+  option fails a check instead of being guessed.
+- **Source fields come first in the schema,** so the model picks its quote before it writes
+  the question.
+
+**First run** (cloud architecture deck, 19 slides, 10 questions): **10 passed, 0 rejected,
+$0.41 and about a minute.** $0.23 of that was the first vision reading, which is now cached.
+I checked every question against its slide by hand: all answer keys were right, every
+quote was real, and the distractors were plausible (e.g. swapping the customer gateway and
+the virtual private gateway).
+
+**Gap: no question used a diagram.** 16 of the 19 slides are diagrams, which vision had
+read, but all 10 questions came from slide text. The prompt tells the model to prefer
+facts a page states plainly, because transcriptions can be wrong, and it followed that.
+For a course where the diagrams are the content, that's the wrong trade-off. Measuring it
+properly needs the question rubric and labels next on the roadmap, not one run.
+
+---
+
 ## 2026-10-25: Vision engine: Claude reads the flagged pages
 
 **Setup:** the new `vision` engine runs the baseline everywhere and sends only the pages it
