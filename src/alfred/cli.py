@@ -5,11 +5,14 @@ import sys
 from pathlib import Path
 
 from alfred.evals import ingestion as ingestion_eval
+from alfred.evals import questions as question_labels
 from alfred.ingest import Document, Engine, IngestError, docling_parser, ingest
 from alfred.ingest.vision import VisionReader
 from alfred.llm import Usage, default_cache
 from alfred.questions import MultipleChoice, QuestionSet
 from alfred.questions.generate import GenerationError, Generator
+
+LABELS = Path("evals/questions/labels.jsonl")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -38,6 +41,11 @@ def main(argv: list[str] | None = None) -> int:
     generate_cmd.add_argument("--out", type=Path, help="also write the question set as JSON")
     generate_cmd.set_defaults(handler=_generate)
 
+    label_cmd = commands.add_parser("label", help="judge generated questions by the rubric")
+    label_cmd.add_argument("questions", type=Path, help="a question set from generate --out")
+    label_cmd.add_argument("--labels", type=Path, default=LABELS)
+    label_cmd.set_defaults(handler=_label)
+
     eval_cmd = commands.add_parser("eval", help="run an evaluation")
     evals = eval_cmd.add_subparsers(dest="evaluation", required=True)
     bench = evals.add_parser("ingestion", help="score ingestion engines against labeled facts")
@@ -55,6 +63,9 @@ def main(argv: list[str] | None = None) -> int:
         "--no-cache", action="store_true", help="call the vision model even for pages read before"
     )
     bench.set_defaults(handler=_eval_ingestion)
+    summary = evals.add_parser("questions", help="summarize the hand labels of questions")
+    summary.add_argument("--labels", type=Path, default=LABELS)
+    summary.set_defaults(handler=_eval_questions)
 
     args = parser.parse_args(argv)
     return args.handler(parser, args)
@@ -99,6 +110,30 @@ def _generate(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if args.out:
         # The question set quotes the course material: keep it out of git (e.g. data/private).
         args.out.write_text(questions.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    return 0
+
+
+def _label(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    if not args.questions.is_file():
+        parser.error(f"no such file: {args.questions}")
+    try:
+        questions = question_labels.load_question_set(args.questions)
+        question_labels.label_set(questions, args.labels, out=sys.stdout)
+        labels = question_labels.load_labels(args.labels)
+    except question_labels.LabelError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print("\n" + question_labels.summarize(labels.values()))
+    return 0
+
+
+def _eval_questions(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    try:
+        labels = question_labels.load_labels(args.labels)
+    except question_labels.LabelError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    print(question_labels.summarize(labels.values()))
     return 0
 
 

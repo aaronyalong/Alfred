@@ -47,6 +47,12 @@ pattern comes up.
 
 ## How to label
 
+```bash
+uv run alfred generate data/private/lecture.pptx --out data/private/lecture-questions.json
+uv run alfred label data/private/lecture-questions.json    # resumable: q stops, labels are kept
+uv run alfred eval questions                             # summary of all labels so far
+```
+
 - Label about 100 questions, from at least 3 documents and both question types.
 - Label every question in a generated set, not only the interesting ones, so the rates are
   honest.
@@ -56,6 +62,6 @@ pattern comes up.
 ## What's stored
 
 Course files and generated questions stay in `data/private/` (git-ignored), because the
-questions quote the course. `labels.toml` in this folder holds only judgments. Each label
+questions quote the course. `labels.jsonl` in this folder holds only judgments. Each label
 points to its question by an id derived from the question text and the document's
 SHA-256, so the repo never contains course text.
