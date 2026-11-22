@@ -21,6 +21,8 @@ htmlcov/
 
 # Node (frontend)
 node_modules/
+web/dist/
+web/openapi.json
 
 # Editors / OS
 .vscode/

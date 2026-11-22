@@ -46,3 +46,44 @@ jobs:
         run: uv run pytest tests/web
         env:
           ALFRED_TEST_DATABASE_URL: postgresql+psycopg://alfred:alfred@localhost:5432/alfred_test
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The frontend's API types are generated from the backend. If the API changed and
+      # they weren't regenerated, this fails instead of the app breaking at runtime.
+      - name: API types are up to date
+        run: |
+          uv sync --locked
+          npm run api:types
+          git diff --exit-code src/api/schema.d.ts
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build

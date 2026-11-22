@@ -1,0 +1,5 @@
+dist
+openapi.json
+package-lock.json
+# Generated from the API; regenerate with `npm run api:types`.
+src/api/schema.d.ts

@@ -2,12 +2,14 @@
 
 import argparse
 import contextlib
+import json
 import logging
 import sys
 from pathlib import Path
 
 import uvicorn
 
+from alfred.api import create_app
 from alfred.config import get_settings
 from alfred.db.session import make_sessions
 from alfred.evals import ingestion as ingestion_eval
@@ -62,6 +64,11 @@ def main(argv: list[str] | None = None) -> int:
 
     worker_cmd = commands.add_parser("worker", help="run the jobs queued by the web API")
     worker_cmd.set_defaults(handler=_worker)
+
+    openapi_cmd = commands.add_parser(
+        "openapi", help="print the web API's schema; the frontend's types are generated from it"
+    )
+    openapi_cmd.set_defaults(handler=_openapi)
 
     eval_cmd = commands.add_parser("eval", help="run an evaluation")
     evals = eval_cmd.add_subparsers(dest="evaluation", required=True)
@@ -148,6 +155,11 @@ def _serve(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     uvicorn.run(
         "alfred.api:create_app", factory=True, host=args.host, port=args.port, reload=args.reload
     )
+    return 0
+
+
+def _openapi(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    print(json.dumps(create_app().openapi(), indent=2))
     return 0
 
 

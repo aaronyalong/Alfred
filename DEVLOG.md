@@ -4,6 +4,39 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-11-21: Frontend: courses, upload, quiz and results
+
+**Done:** a React + TypeScript app (Vite) with the screens from the mockup: courses, a
+course page with upload, document status and a preview of the extracted text, a form for a
+new practice set, the quiz in practice mode (answer, then the explanation and the cited
+quote), results, and reporting a question. Pages that show work in progress poll every 2
+seconds until it is done.
+
+**Decisions**
+
+- **The API types are generated, not written.** `npm run api:types` turns the backend's
+  OpenAPI schema into TypeScript, and CI fails if the committed types are stale. An API
+  change the frontend doesn't follow becomes a type error, not a runtime bug.
+- **The server grades.** The quiz shows right or wrong at once, since practice mode gives
+  the answers anyway, but the score on the results page is the one the server computed
+  and stored.
+- **Progress steps show only what is known.** The mockup had four steps; the backend
+  reports two states (queued, generating), so the page shows those and doesn't fake the
+  rest.
+- **Plain CSS with the mockup's colors as variables,** no UI framework: five screens don't
+  need one.
+
+**Checked in a real browser** (headless Chrome driven by a script, against the real API
+and Postgres, with questions generated earlier, so at no cost): the full path from the
+course list through a 10-question quiz to the results, at desktop and phone width, plus a
+refused upload and an accepted one. It found two things the tests hadn't: a missing
+favicon, and extraction notes shown in red as if they were errors.
+
+**Left out:** the mockup's "difficulty mix" and "focus" fields (the backend can't do them
+yet) and the account avatar (there are no accounts yet).
+
+---
+
 ## 2026-11-21: Web backend: API, job queue and worker
 
 **Change of order:** the web app is being built before the question evaluation is

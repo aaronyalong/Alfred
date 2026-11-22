@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 from pathlib import Path
 
@@ -59,3 +60,13 @@ def test_ingest_rejects_page_numbers_that_do_not_exist(
 ) -> None:
     assert main(["ingest", str(make_pdf(["only page"])), "--page", "5"]) == 1
     assert "has no page 5" in capsys.readouterr().err
+
+
+def test_openapi_prints_the_api_schema_the_frontend_types_come_from(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["openapi"]) == 0
+
+    schema = json.loads(capsys.readouterr().out)
+    assert "/api/courses/{course_id}/documents" in schema["paths"]
+    assert "SetDetail" in schema["components"]["schemas"]

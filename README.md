@@ -45,7 +45,7 @@ uv run ruff check . && uv run pyright
 
 ### Running the web API
 
-The web app has two processes: the API, which stores uploads and queues work, and a worker,
+The web app has two backend processes: the API, which stores uploads and queues work, and a worker,
 which parses files and writes questions in the background. Both need Postgres.
 
 ```bash
@@ -55,8 +55,20 @@ uv run alfred serve --reload     # the API, on http://127.0.0.1:8000 (docs at /d
 uv run alfred worker             # in a second terminal
 ```
 
-There are no accounts yet, so the API listens on localhost only. The frontend is not built
-yet; until then, http://127.0.0.1:8000/docs lets you try every endpoint.
+There are no accounts yet, so the API listens on localhost only.
+
+### Running the frontend
+
+Requires Node 24. With the API and the worker running:
+
+```bash
+cd web
+npm install
+npm run dev                      # http://localhost:5173, forwards /api to the API
+npm test                         # tests
+npm run typecheck && npm run format:check
+npm run api:types                # after changing the API: regenerate src/api/schema.d.ts
+```
 
 To run the web tests against Postgres instead of SQLite:
 
