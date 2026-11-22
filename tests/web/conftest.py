@@ -68,7 +68,8 @@ def worker(sessions: Sessions, upload_dir: Path, claude: FakeClaude) -> Worker:
 
 @pytest.fixture
 def client(sessions: Sessions, upload_dir: Path) -> Iterator[TestClient]:
-    with TestClient(create_app(sessions, upload_dir)) as test_client:
+    # An empty folder for the frontend, so these tests see the API alone.
+    with TestClient(create_app(sessions, upload_dir, upload_dir / "no-frontend")) as test_client:
         yield test_client
 
 

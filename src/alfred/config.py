@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://alfred:alfred@localhost:5432/alfred"
     # Uploaded files wait here until the worker has parsed them, then they are deleted.
     alfred_upload_dir: Path = Path("data/private/uploads")
+    # The built frontend (`npm run build` in web/). If it exists, the API serves it too.
+    alfred_web_dir: Path = Path("web/dist")
     # Parser for uploads: "vision" also reads diagrams and formulas, at a cost per flagged page.
     alfred_ingest_engine: str = "vision"
 

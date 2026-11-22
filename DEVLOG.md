@@ -4,6 +4,36 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-11-21: One command to run it: Docker Compose
+
+**Done:** `docker compose up --build` starts Postgres, runs the migrations, then starts
+the API and the worker. The API also serves the built frontend, so the app is one address,
+http://localhost:8000. This completes the web MVP (Phase 3).
+
+**Decisions**
+
+- **One image, three roles.** The API, the worker and the migration step run the same
+  image with different commands, so they can't drift apart.
+- **The API serves the frontend.** A single-page app's pages (like `/courses/123`) exist
+  only in the browser, so any path that isn't a file gets `index.html`. Unknown `/api/`
+  paths stay a 404, so an API client never gets a web page as an answer.
+- **Nothing gets into the image by default.** `.dockerignore` excludes everything and
+  lists what is allowed, so course files, `.env` and `.git` can't be copied in by a
+  careless `COPY`. The app runs as a non-root user.
+- **Migrations run as their own step** that the API and worker wait for, not at app
+  startup: with several app containers, startup migrations would race.
+- **Ports are published on localhost only,** because there are no accounts yet.
+
+**Checked:** the browser run from the frontend entry (courses → quiz → results), repeated
+against the Docker build, with no page errors. An upload went from the API container to
+the worker container through the shared volume and was parsed. The worker exits cleanly
+in under a second on `docker compose stop` and puts its job back. The image is 469 MB;
+keeping uv's download cache out of it saved 170 MB.
+
+**Before it can go online:** accounts, a spending limit per user, and HTTPS in front.
+
+---
+
 ## 2026-11-21: Frontend: courses, upload, quiz and results
 
 **Done:** a React + TypeScript app (Vite) with the screens from the mockup: courses, a

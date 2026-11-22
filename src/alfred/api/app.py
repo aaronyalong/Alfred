@@ -1,4 +1,5 @@
 """The HTTP API. A thin shell: it stores requests and queues jobs; the worker does the work.
+It also serves the built frontend, when there is one, so one process delivers the whole app.
 
 There are no accounts yet, so run it on localhost only.
 """
@@ -10,9 +11,12 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, UploadFile, status
 from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import TypeAdapter
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, selectinload
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from alfred import jobs, uploads
@@ -69,13 +73,37 @@ def _session(request: Request) -> Iterator[Session]:
 Db = Annotated[Session, Depends(_session)]
 
 
-def create_app(sessions: Sessions | None = None, upload_dir: Path | None = None) -> FastAPI:
+def create_app(
+    sessions: Sessions | None = None,
+    upload_dir: Path | None = None,
+    web_dir: Path | None = None,
+) -> FastAPI:
+    settings = get_settings()
     app = FastAPI(title="Alfred", version="0.1.0")
     app.state.sessions = sessions or make_sessions()
-    app.state.upload_dir = upload_dir or get_settings().alfred_upload_dir
+    app.state.upload_dir = upload_dir or settings.alfred_upload_dir
     app.include_router(router)
     app.add_middleware(_UploadLimit)
+
+    web_dir = web_dir or settings.alfred_web_dir
+    if (web_dir / "index.html").is_file():
+        # Mounted last: the API routes above are matched first.
+        app.mount("/", _Frontend(directory=web_dir, html=True))
     return app
+
+
+class _Frontend(StaticFiles):
+    """The built frontend. It is a single-page app: its pages, like /courses/123, exist only
+    in the browser, so any path that isn't a file gets index.html and the app takes over."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as e:
+            # An unknown API path stays a 404; it must not answer with a web page.
+            if e.status_code != status.HTTP_404_NOT_FOUND or path.startswith("api/"):
+                raise
+            return await super().get_response("index.html", scope)
 
 
 class _UploadLimit:

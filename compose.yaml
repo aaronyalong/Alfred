@@ -1,4 +1,19 @@
-# Local services for the web app. Start the database with: docker compose up -d db
+# The whole app:            docker compose up --build     then open http://localhost:8000
+# Only the database:        docker compose up -d db       (for running the app from source)
+#
+# There are no accounts yet, so every port is published on this machine only.
+
+x-app: &app
+  build: .
+  image: alfred:local  # one image, shared by the three services below
+  environment:
+    DATABASE_URL: postgresql+psycopg://alfred:alfred@db:5432/alfred
+    # Taken from your shell or from a .env file next to this one.
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ALFRED_MODEL: ${ALFRED_MODEL:-claude-opus-5-5}
+  volumes:
+    - data:/data
+
 services:
   db:
     image: postgres:18
@@ -7,7 +22,7 @@ services:
       POSTGRES_PASSWORD: alfred  # local development only
       POSTGRES_DB: alfred
     ports:
-      - "127.0.0.1:5432:5432"  # reachable from this machine only
+      - "127.0.0.1:5432:5432"
     volumes:
       - db:/var/lib/postgresql
     healthcheck:
@@ -16,5 +31,38 @@ services:
       timeout: 2s
       retries: 15
 
+  # Creates or updates the tables, then exits. The API and the worker wait for it.
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    <<: *app
+    command: ["alfred", "worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   db:
+  data:

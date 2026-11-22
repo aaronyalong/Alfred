@@ -1,0 +1,13 @@
+# Everything is left out of the image unless listed below. Course files (data/), .env and
+# .git must never get in.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!alembic.ini
+!src
+!web
+web/node_modules
+web/dist
+web/openapi.json
+**/__pycache__

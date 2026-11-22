@@ -30,6 +30,20 @@ upload ─▶ ingest ─▶ topic map ─▶ generate ─▶ check ─▶ verify
 
 Python 3.13 · Pydantic · Claude API · FastAPI · PostgreSQL · React + TypeScript · Docker
 
+## Running it
+
+Requires Docker and an Anthropic API key. Reading a file and writing questions call the
+Claude API, which costs money: roughly 5 to 50 cents per lecture.
+
+```bash
+export ANTHROPIC_API_KEY=...     # or put it in a .env file here
+docker compose up --build        # then open http://localhost:8000
+```
+
+This starts Postgres, the API (which also serves the web page) and the background worker.
+There are no accounts yet, so it is reachable from your own machine only. Your courses are
+kept in Docker volumes; `docker compose down -v` deletes them.
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/).
@@ -43,13 +57,13 @@ uv run pytest                    # tests
 uv run ruff check . && uv run pyright
 ```
 
-### Running the web API
+### Running the web API from source
 
 The web app has two backend processes: the API, which stores uploads and queues work, and a worker,
 which parses files and writes questions in the background. Both need Postgres.
 
 ```bash
-docker compose up -d db          # Postgres, on localhost only
+docker compose up -d db          # only Postgres, on localhost
 uv run alembic upgrade head      # create or update the tables
 uv run alfred serve --reload     # the API, on http://127.0.0.1:8000 (docs at /docs)
 uv run alfred worker             # in a second terminal
