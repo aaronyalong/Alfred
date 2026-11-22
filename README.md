@@ -43,6 +43,29 @@ uv run pytest                    # tests
 uv run ruff check . && uv run pyright
 ```
 
+### Running the web API
+
+The web app has two processes: the API, which stores uploads and queues work, and a worker,
+which parses files and writes questions in the background. Both need Postgres.
+
+```bash
+docker compose up -d db          # Postgres, on localhost only
+uv run alembic upgrade head      # create or update the tables
+uv run alfred serve --reload     # the API, on http://127.0.0.1:8000 (docs at /docs)
+uv run alfred worker             # in a second terminal
+```
+
+There are no accounts yet, so the API listens on localhost only. The frontend is not built
+yet; until then, http://127.0.0.1:8000/docs lets you try every endpoint.
+
+To run the web tests against Postgres instead of SQLite:
+
+```bash
+docker compose exec db createdb -U alfred alfred_test   # once
+ALFRED_TEST_DATABASE_URL=postgresql+psycopg://alfred:alfred@localhost:5432/alfred_test \
+  uv run pytest tests/web
+```
+
 Course materials go in `data/private/`, which is git-ignored. A pre-commit hook blocks
 committing PDF, PPTX and DOCX files anywhere else.
 

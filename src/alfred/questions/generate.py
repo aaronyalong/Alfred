@@ -147,9 +147,17 @@ class Generator:
         self._client = client
         self._topic_cache = topic_cache
 
-    def generate(self, document: Document, *, count: int = 10) -> QuestionSet:
-        topics = self.topic_map(document)
-        true_false = round(count * TRUE_FALSE_SHARE)
+    def generate(
+        self,
+        document: Document,
+        *,
+        count: int = 10,
+        true_false_share: float = TRUE_FALSE_SHARE,
+        topics: TopicMap | None = None,
+    ) -> QuestionSet:
+        """`topics` is the document's topic map if the caller has stored it already."""
+        topics = topics or self.topic_map(document)
+        true_false = round(count * true_false_share)
         drafts = self._draft(document, topics, count - true_false, true_false)
         questions = [
             *map(_multiple_choice, drafts.multiple_choice),
@@ -197,6 +205,8 @@ class Generator:
         topic_list = json.dumps(
             [t.model_dump(include={"id", "name", "pages"}) for t in topics.topics]
         )
+        kinds = ((multiple_choice, "multiple-choice"), (true_false, "true/false"))
+        asked = [f"{n} {kind}" for n, kind in kinds if n]
         content: list[BetaTextBlockParam] = [
             {"type": "text", "text": render_document(document)},
             # The document and its topics are the same on every run: cache them, so asking
@@ -206,13 +216,7 @@ class Generator:
                 "text": f"<topic_map>\n{topic_list}\n</topic_map>",
                 "cache_control": {"type": "ephemeral"},
             },
-            {
-                "type": "text",
-                "text": (
-                    f"Write {multiple_choice} multiple-choice and {true_false} true/false "
-                    "questions."
-                ),
-            },
+            {"type": "text", "text": f"Write {' and '.join(asked)} questions."},
         ]
         output_config: BetaOutputConfigParam = {"effort": "high", "format": _format(_QuestionsOut)}
 

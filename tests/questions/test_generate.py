@@ -129,6 +129,18 @@ def test_topic_maps_are_cached_per_document(tmp_path: Path) -> None:
     assert second.usage.cached == 1
 
 
+def test_a_stored_topic_map_is_reused_and_one_kind_of_question_can_be_asked_for() -> None:
+    first, _ = generator(TOPICS)
+    topics = first.topic_map(deck())
+    gen, fake = generator(QUESTIONS)
+
+    result = gen.generate(deck(), count=5, true_false_share=1.0, topics=topics)
+
+    assert len(fake.requests) == 1  # no second call to map the topics
+    assert "Write 5 true/false questions." in str(fake.requests[0])
+    assert result.topics == topics
+
+
 def test_render_document_numbers_pages_and_includes_their_notes() -> None:
     text = render_document(deck())
 

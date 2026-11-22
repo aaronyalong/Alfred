@@ -1,9 +1,15 @@
 """Command-line interface for running and inspecting the pipeline locally."""
 
 import argparse
+import contextlib
+import logging
 import sys
 from pathlib import Path
 
+import uvicorn
+
+from alfred.config import get_settings
+from alfred.db.session import make_sessions
 from alfred.evals import ingestion as ingestion_eval
 from alfred.evals import questions as question_labels
 from alfred.ingest import Document, Engine, IngestError, docling_parser, ingest
@@ -11,6 +17,7 @@ from alfred.ingest.vision import VisionReader
 from alfred.llm import Usage, default_cache
 from alfred.questions import MultipleChoice, QuestionSet
 from alfred.questions.generate import GenerationError, Generator
+from alfred.worker import Worker
 
 LABELS = Path("evals/questions/labels.jsonl")
 
@@ -45,6 +52,16 @@ def main(argv: list[str] | None = None) -> int:
     label_cmd.add_argument("questions", type=Path, help="a question set from generate --out")
     label_cmd.add_argument("--labels", type=Path, default=LABELS)
     label_cmd.set_defaults(handler=_label)
+
+    serve_cmd = commands.add_parser("serve", help="run the web API")
+    # No accounts yet: anyone who can reach the API can use it, so it listens locally only.
+    serve_cmd.add_argument("--host", default="127.0.0.1")
+    serve_cmd.add_argument("--port", type=int, default=8000)
+    serve_cmd.add_argument("--reload", action="store_true", help="restart when code changes")
+    serve_cmd.set_defaults(handler=_serve)
+
+    worker_cmd = commands.add_parser("worker", help="run the jobs queued by the web API")
+    worker_cmd.set_defaults(handler=_worker)
 
     eval_cmd = commands.add_parser("eval", help="run an evaluation")
     evals = eval_cmd.add_subparsers(dest="evaluation", required=True)
@@ -124,6 +141,25 @@ def _label(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     print("\n" + question_labels.summarize(labels.values()))
+    return 0
+
+
+def _serve(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    uvicorn.run(
+        "alfred.api:create_app", factory=True, host=args.host, port=args.port, reload=args.reload
+    )
+    return 0
+
+
+def _worker(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    settings = get_settings()
+    try:
+        engine = Engine(settings.alfred_ingest_engine)
+    except ValueError:
+        parser.error(f"ALFRED_INGEST_ENGINE must be one of: {', '.join(Engine)}")
+    with contextlib.suppress(KeyboardInterrupt):  # Ctrl-C is the normal way to stop it
+        Worker(make_sessions(), settings.alfred_upload_dir, engine).run_forever()
     return 0
 
 

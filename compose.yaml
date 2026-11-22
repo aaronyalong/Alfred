@@ -1,0 +1,20 @@
+# Local services for the web app. Start the database with: docker compose up -d db
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: alfred
+      POSTGRES_PASSWORD: alfred  # local development only
+      POSTGRES_DB: alfred
+    ports:
+      - "127.0.0.1:5432:5432"  # reachable from this machine only
+    volumes:
+      - db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alfred"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+volumes:
+  db:

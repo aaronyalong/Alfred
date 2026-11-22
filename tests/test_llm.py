@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -6,7 +7,8 @@ import pytest
 from anthropic.types.beta import BetaMessage
 from pydantic import BaseModel
 
-from alfred.llm import DiskCache, Usage, final_text, request_key
+from alfred.config import get_settings
+from alfred.llm import DiskCache, LLMError, Usage, final_text, make_client, request_key
 
 
 def message(model: str = "claude-opus-5-5", **tokens: int) -> BetaMessage:
@@ -75,3 +77,29 @@ def test_disk_cache_round_trips_and_misses_on_bad_files(tmp_path: Path) -> None:
 def test_request_keys_change_with_any_part_of_the_request() -> None:
     assert request_key(model="a", prompt="p") == request_key(prompt="p", model="a")
     assert request_key(model="a", prompt="p") != request_key(model="b", prompt="p")
+
+
+@pytest.fixture
+def no_credentials(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """No key in the environment, no .env file and no credentials saved in the home folder."""
+    for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_PROFILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()  # later tests read the real settings again
+
+
+@pytest.mark.usefixtures("no_credentials")
+def test_a_client_without_credentials_is_refused_with_a_hint() -> None:
+    with pytest.raises(LLMError, match="ANTHROPIC_API_KEY"):
+        make_client()
+
+
+@pytest.mark.usefixtures("no_credentials")
+def test_a_client_uses_the_key_from_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-123")
+    get_settings.cache_clear()
+
+    assert make_client().api_key == "test-key-123"

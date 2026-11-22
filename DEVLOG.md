@@ -4,6 +4,53 @@ Decisions, experiments and results, newest first. Negative results are recorded 
 
 ---
 
+## 2026-11-21: Web backend: API, job queue and worker
+
+**Change of order:** the web app is being built before the question evaluation is
+finished. The rubric and the labeling command exist, but only one question is labeled, so
+question quality is still spot-checked, not measured. The labeling, the model comparison
+and the diagram fix (written, not yet tested on a real deck) come back after a first
+invite-only deployment.
+
+**Done:** a FastAPI app and a worker process, both thin shells over the library the
+command line uses. The API stores uploads and queues jobs; the worker parses files, maps
+their topics and writes practice sets. Attempts are graded by the server, and a question
+can be flagged. Tables are created by an Alembic migration.
+
+**Decisions**
+
+- **The queue is a Postgres table** (decided on 2026-10-20). A worker claims the oldest job
+  with `FOR UPDATE SKIP LOCKED`. The claim is a 30-minute lease, not a lock held while the
+  job runs, so no transaction stays open during model calls, and a job whose worker died
+  is picked up again. After 3 attempts it is given up, so a job that crashes its worker
+  can't do so forever. On shutdown the job in progress goes back to the queue.
+- **Parsed documents and questions are stored as JSON,** in the same Pydantic formats the
+  command line uses, so ingestion, generation and the checks run on them unchanged.
+- **The topic map is made when a file is uploaded,** and stored with the document. A
+  practice set then costs one model call per document.
+- **Originals are deleted after parsing.** Only the extracted text is kept. Each upload
+  waits in its own folder named by its id, so an uploaded file name can't escape or
+  overwrite anything.
+- **Uploads are checked before they are queued:** size (50 MB, also refused early from the
+  declared length) and real file type, read from the content, not the extension.
+- **A multi-document set splits its questions by document size.** Each document is still
+  one generation call that sees the whole document.
+- **Tests run on SQLite and on Postgres.** SQLite keeps `uv run pytest` free of services;
+  CI runs the web tests again on Postgres, where a test with two open transactions shows
+  that two workers never claim the same job. A test also checks that the migration builds
+  exactly the tables the models describe.
+
+**Found by running the real processes:** with no API key, the Anthropic SDK builds a client
+anyway and fails on the first request with a `TypeError`, which the code treated as an
+unexpected crash ("Something went wrong on our side"). The key is now checked when the
+client is made, so the user sees which setting is missing.
+
+**Not yet:** accounts and per-user spending limits (needed before anyone else can reach
+it), the frontend, and the form's "difficulty mix" and "focus" options from the mockup,
+which need prompt changes that should be measured first.
+
+---
+
 ## 2026-10-26: First question generation
 
 **Done:** `alfred generate <file>` maps a document's topics (one call, cached on disk per

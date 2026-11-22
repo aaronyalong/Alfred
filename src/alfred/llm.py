@@ -40,10 +40,12 @@ class LLMError(Exception):
 
 def make_client() -> anthropic.Anthropic:
     key = get_settings().anthropic_api_key
-    try:
-        return anthropic.Anthropic(api_key=key.get_secret_value() if key else None)
-    except anthropic.AnthropicError as e:  # no credentials found
-        raise LLMError(f"{KEY_HINT}: {e}") from e
+    client = anthropic.Anthropic(api_key=key.get_secret_value() if key else None)
+    # The SDK accepts a client without credentials and fails on its first request, with an
+    # error that isn't an API error. Checked here, so the user gets the hint instead.
+    if not (client.api_key or client.auth_token or client.credentials):
+        raise LLMError(KEY_HINT)
+    return client
 
 
 def final_text(message: BetaMessage) -> str:

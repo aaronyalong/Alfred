@@ -8,6 +8,18 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: alfred
+          POSTGRES_PASSWORD: alfred
+          POSTGRES_DB: alfred_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U alfred" --health-interval 2s
+          --health-timeout 2s --health-retries 15
     steps:
       - uses: actions/checkout@v5
 
@@ -27,3 +39,10 @@ jobs:
 
       - name: Tests
         run: uv run pytest
+
+      # The web tests ran on SQLite above. Postgres is what production uses, and only it can
+      # show that two workers never take the same job.
+      - name: Web tests on Postgres
+        run: uv run pytest tests/web
+        env:
+          ALFRED_TEST_DATABASE_URL: postgresql+psycopg://alfred:alfred@localhost:5432/alfred_test

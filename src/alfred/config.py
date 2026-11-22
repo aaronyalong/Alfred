@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     # Saved vision readings contain course text, so the default lives in git-ignored data/private.
     alfred_cache_dir: Path = Path("data/private/cache")
 
+    # The web app. The default matches the Postgres service in compose.yaml.
+    database_url: str = "postgresql+psycopg://alfred:alfred@localhost:5432/alfred"
+    # Uploaded files wait here until the worker has parsed them, then they are deleted.
+    alfred_upload_dir: Path = Path("data/private/uploads")
+    # Parser for uploads: "vision" also reads diagrams and formulas, at a cost per flagged page.
+    alfred_ingest_engine: str = "vision"
+
 
 @lru_cache
 def get_settings() -> Settings:
